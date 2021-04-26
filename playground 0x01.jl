@@ -23,14 +23,13 @@ gtkCanvas.mouse.button1press = @guarded (widget, event) -> begin
     reveal(widget)
 end
 
-
 @guarded draw(gtkCanvas) do widget
     # Called by the main loop at specific frequency
     ctx = getgc(gtkCanvas)
     h = height(gtkCanvas)
     w = width(gtkCanvas)
     
-    grid_size = 5
+    grid_size = min(size(ca.matrix)[1], size(ca.matrix)[2])
     
     clearColor = RGB(0.22, 0.23, 0.29)
     set_source_rgb(ctx, clearColor.r, clearColor.g, clearColor.b) # 56/255, 60/255, 74/255) - - - ---
@@ -72,18 +71,18 @@ end
 
 function draw_ca(ctx, h_canvas, w_canvas)
     # called within @guarded draw(gtkCanvas) above
-    w_cell = round(w_canvas / 5)
-    h_cell = round(h_canvas / 5)
+    matrix_h, matrix_w = size(ca.matrix)
+    w_cell = round(w_canvas / matrix_w)
+    h_cell = round(h_canvas / matrix_h)
     zeros_color = RGB(0.1, 0.11, 0.12)
     ones_color = RGB(0.6, 0.32, 0.32)
-    for i in 0:4, j in 0:4
+    for i in 0:matrix_h-1, j in 0:matrix_w-1
         value = ca.matrix[i + 1, j + 1]
         color = value == 1 ? ones_color : zeros_color
         set_source_rgb(ctx, color.r, color.g, color.b)
         rectangle(ctx, i * w_cell,  j * h_cell, w_cell - 1, h_cell - 1)
         fill(ctx)
     end
-    
 end
 
 println("""=========================================================================================
@@ -114,8 +113,53 @@ mutable struct CellularAutomata
     matrix
 end
 
+function gol_number_of_adjacent_cells(i, j, previous_state_matrix)
+    h,w = size(previous_state_matrix)
+    
+    empty_row = reshape( [ 0 for i = 1:w ] , (1,w) )
+    empty_col = [ 0 for i = 1:h+2]
+
+    tmp = [ empty_row ; previous_state_matrix ; empty_row ]
+    tmp = [ empty_col  tmp  empty_col] 
+
+    sub = tmp[i:i+2,j:j+2]
+    sub[2,2] = 0 # don't count the center cell
+    sum(sub)
+end
+
+
+# GOL rules
+function gol_compute_next_state(i, j, previous_state_matrix) 
+	adjacent_live_cell_count = gol_number_of_adjacent_cells(i, j, previous_state_matrix)
+    previous_state = previous_state_matrix[i,j]
+    next_state = 0
+    if previous_state == 1
+        if adjacent_live_cell_count < 2
+            next_state = 0
+        elseif adjacent_live_cell_count <= 3
+            next_state = 1
+        elseif adjacent_live_cell_count > 3
+            next_state = 0
+        end
+    elseif previous_state == 0
+        if adjacent_live_cell_count == 3
+            next_state = 1
+        else
+            next_state = 0
+        end
+    end
+    next_state
+end
+
+
 function tick_ca!(ca::CellularAutomata)
-    ca.matrix = [ rand([0,1]) for i = 1:5, j = 1:5 ]
+    h, w = size(ca.matrix)
+    #ca.matrix = [ rand([0,1]) for i = 1:h, j = 1:w ]
+    next_matrix = similar(ca.matrix)
+    for i=1:w, j=1:h
+        next_matrix[i,j] = gol_compute_next_state(i, j, ca.matrix)
+    end
+    ca.matrix = next_matrix
 end
 
 function tick_ca!(ca::CellularAutomata, steps)
@@ -124,11 +168,13 @@ function tick_ca!(ca::CellularAutomata, steps)
     end
 end
 
-target_frequency = 2.0
+target_frequency = 5
 
 # init ca
-matrix_5x5 = [ rand([0,1]) for i = 1:5, j = 1:5 ]
-ca = CellularAutomata(matrix_5x5)
+s = 50
+w, h = s, s
+matrix = [ rand([0,1]) for i = 1:h, j = 1:w ]
+ca = CellularAutomata(matrix)
 
 # Main loop
 while true
@@ -137,12 +183,14 @@ while true
     draw(gtkCanvas)
     
     draw_time = time() - t
+    time_to_sleep = 1 / target_frequency - draw_time
+    if time_to_sleep > 0
+        sleep(1 / target_frequency - draw_time)
+    end
+    #println("- draw time : $(round(draw_time, digits=9)) ")
+    #println(ca)
     
-    sleep(1 / target_speed - draw_time)
-    println(round(draw_time, digits=9))
-    println(ca)
-    
-    println("target frequency : $target_speed")
+    #println("target tick frequency : $target_frequency")
     actual_frequency = 1/(time()-t)
-    println("actual frequency : $actual_frequency")
+    println("actual tick frequency : $actual_frequency")
 end
