@@ -124,7 +124,7 @@ function tick_ca!(ca::CellularAutomata, steps)
     end
 end
 
-target_speed = 2.1  # speed in hz
+target_frequency = 2.0
 
 # init ca
 matrix_5x5 = [ rand([0,1]) for i = 1:5, j = 1:5 ]
@@ -141,4 +141,8 @@ while true
     sleep(1 / target_speed - draw_time)
     println(round(draw_time, digits=9))
     println(ca)
+    
+    println("target frequency : $target_speed")
+    actual_frequency = 1/(time()-t)
+    println("actual frequency : $actual_frequency")
 end
