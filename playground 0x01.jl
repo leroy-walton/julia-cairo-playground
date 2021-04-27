@@ -1,14 +1,13 @@
 using Gtk, Images
+using Profile, BenchmarkTools
 
-# Matrix of cells represents CA status
-# ADN = 512 * 3x3 Cell Matrix  ( 512 = 9^2 )
-
-# initialize a 3x4 matrix to zeroes : 
-# ca_matrix = zeros(Int32,height,width)
+#TODO: CA Rules can be coded with 512 bits
 
 @enum CellDawShape SQUARE TRIANGLE CIRCLE
 
 gtkCanvas = @GtkCanvas()
+win = GtkWindow(gtkCanvas, "CA", 1000, 1000)
+show(gtkCanvas)
 
 # call back for mouse events
 gtkCanvas.mouse.button1press = @guarded (widget, event) -> begin
@@ -24,20 +23,30 @@ gtkCanvas.mouse.button1press = @guarded (widget, event) -> begin
 end
 
 @guarded draw(gtkCanvas) do widget
+    #     BenchmarkTools.Trial: 
+    #   memory estimate:  16 bytes
+    #   allocs estimate:  1
+    #   --------------
+    #   minimum time:     11.210 μs (0.00% GC)
+    #   median time:      16.250 μs (0.00% GC)
+    #   mean time:        374.226 μs (0.00% GC)
+    #   maximum time:     64.180 ms (0.00% GC)
+    #   --------------
+    #   samples:          10000
+    #   evals/sample:     1
+
     # Called by the main loop at specific frequency
     ctx = getgc(gtkCanvas)
     h = height(gtkCanvas)
     w = width(gtkCanvas)
     
-    grid_size = min(size(ca.matrix)[1], size(ca.matrix)[2])
-    
     clearColor = RGB(0.22, 0.23, 0.29)
     set_source_rgb(ctx, clearColor.r, clearColor.g, clearColor.b) # 56/255, 60/255, 74/255) - - - ---
     rectangle(ctx, 0, 0, w, h)
-    fill(ctx)
+    #fill(ctx)
 
-    draw_grid(gtkCanvas, 5, 5)
-    stroke(ctx)
+   # draw_grid(gtkCanvas, 5, 5)
+   # stroke(ctx)
 
     draw_ca(ctx, h, w)
     fill(ctx)
@@ -100,8 +109,6 @@ println("""=====================================================================
                                   
 ===============================================================================================""")
 
-win = GtkWindow(gtkCanvas, "CA", 1000, 1000)
-show(gtkCanvas)
 
 # cd = Condition()
 # endit(ww) = notify(cd)                  
@@ -113,7 +120,22 @@ mutable struct CellularAutomata
     matrix
 end
 
-function gol_number_of_adjacent_cells(i, j, previous_state_matrix)
+
+
+function gol_number_of_adjacent_cells_slow(i, j, previous_state_matrix)
+    ## straight forward implementation but very slow :
+    #     BenchmarkTools.Trial: 
+    #   memory estimate:  42.81 KiB
+    #   allocs estimate:  9
+    #   --------------
+    #   minimum time:     4.889 μs (0.00% GC)
+    #   median time:      5.860 μs (0.00% GC)
+    #   mean time:        7.435 μs (14.42% GC)
+    #   maximum time:     374.442 μs (93.94% GC)
+    #   --------------
+    #   samples:          10000
+    #   evals/sample:     7
+
     h,w = size(previous_state_matrix)
     
     empty_row = reshape( [ 0 for i = 1:w ] , (1,w) )
@@ -127,9 +149,102 @@ function gol_number_of_adjacent_cells(i, j, previous_state_matrix)
     sum(sub)
 end
 
+function gol_number_of_adjacent_cells(i, j, matrix)
+    ## faster implementation :
+    #     BenchmarkTools.Trial: 
+    #   memory estimate:  0 bytes
+    #   allocs estimate:  0
+    #   --------------
+    #   minimum time:     34.048 ns (0.00% GC)
+    #   median time:      35.196 ns (0.00% GC)
+    #   mean time:        35.230 ns (0.00% GC)
+    #   maximum time:     101.239 ns (0.00% GC)
+    #   --------------
+    #   samples:          10000
+    #   evals/sample:     993
+
+    h, w = size(matrix)
+
+    sum = 0
+    if i == 1
+        if j == 1
+            #  __..
+            # |0x
+            # |xx
+
+            sum = matrix[ 2, 1 ] + matrix[ 1, 2 ] + matrix[ 2, 2 ]
+        elseif j == w
+            #         ..__
+            #           xo|
+            #           xx|
+
+            sum = matrix[ i+1, j ] + matrix[ i,j-1 ] + matrix[ i+1, j-1 ]
+        else
+            #   ..___..
+            #     xox
+            #     xxx
+
+            sum = matrix[ i+1, j-1 ] + matrix[ i+1, j ] + matrix[ i+1, j+1 ] + 
+                        matrix[ i, j-1 ] + matrix[ i, j+1 ]
+        end
+    elseif i == h
+        if j == 1
+            # :
+            # |xx
+            # |ox
+            #  --
+
+            sum = matrix[ i-1, j ] + matrix[ i-1, j+1 ] + matrix[ i, j+1 ]
+        elseif j == w
+            #               :
+            #             xx|
+            #             xo|
+            #             --
+
+            sum = matrix[ i, j-1 ] + matrix[ i-1, j ] + matrix[ i-1, j-1 ]
+        else
+            #
+            #      xxx 
+            #      xox
+            #    ..---..
+
+            sum = matrix[ i-1, j-1 ] + matrix[ i-1, j ] + matrix[ i-1, j+1 ] + 
+                matrix[ i, j-1 ] + matrix[ i, j+1 ] 
+        end
+    else # 1 < i < h
+        if j == 1
+            #  :
+            #  |xx
+            #  |ox
+            #  |xx
+            #  :
+
+            sum = matrix[ i-1, j+1 ] + matrix[ i, j+1 ] + matrix[ i+1, j+1] +
+                 matrix[ i-1, j ] + matrix[ i+1, j ]
+        elseif j == w
+            #          :
+            #        xx|
+            #        xo|
+            #        xx|
+            #          :
+
+            sum = matrix[ i-1, j-1 ] + matrix[ i, j-1 ] + matrix[ i+1, j-1 ] + 
+                matrix[ i-1, j ] + matrix[ i+1, j ]
+        else
+            #     xxx
+            #     xox
+            #     xxx
+
+            sum = matrix[ i-1, j-1 ] + matrix[ i-1, j ] + matrix[ i-1, j+1 ] + 
+                  matrix[ i,   j-1 ]                    + matrix[ i,   j+1 ] + 
+                  matrix[ i+1, j-1 ] + matrix[ i+1, j ] + matrix[ i+1, j+1 ]
+        end
+    end
+    sum
+end
 
 # GOL rules
-function gol_compute_next_state(i, j, previous_state_matrix) 
+function gol_compute_next_state(i, j, previous_state_matrix)
 	adjacent_live_cell_count = gol_number_of_adjacent_cells(i, j, previous_state_matrix)
     previous_state = previous_state_matrix[i,j]
     next_state = 0
@@ -151,7 +266,6 @@ function gol_compute_next_state(i, j, previous_state_matrix)
     next_state
 end
 
-
 function tick_ca!(ca::CellularAutomata)
     h, w = size(ca.matrix)
     #ca.matrix = [ rand([0,1]) for i = 1:h, j = 1:w ]
@@ -168,29 +282,37 @@ function tick_ca!(ca::CellularAutomata, steps)
     end
 end
 
-target_frequency = 5
-
 # init ca
-s = 50
+target_frequency = 24
+s = 300
 w, h = s, s
 matrix = [ rand([0,1]) for i = 1:h, j = 1:w ]
 ca = CellularAutomata(matrix)
 
-# Main loop
-while true
-    t = time()
+function main_loop()
+    t=time()
+
     tick_ca!(ca)
+
+    tick_time = time()-t
+    t = time()
+    
     draw(gtkCanvas)
     
     draw_time = time() - t
-    time_to_sleep = 1 / target_frequency - draw_time
+    
+    time_to_sleep = 1 / target_frequency - draw_time - tick_time
     if time_to_sleep > 0
         sleep(1 / target_frequency - draw_time)
     end
-    #println("- draw time : $(round(draw_time, digits=9)) ")
-    #println(ca)
+    println("* tick time : $(round(tick_time, digits=9)) ")
+    println("- draw time : $(round(draw_time, digits=9)) ")
     
     #println("target tick frequency : $target_frequency")
     actual_frequency = 1/(time()-t)
-    println("actual tick frequency : $actual_frequency")
+    println("                             actual tick frequency : $actual_frequency")
+end
+
+while true
+    main_loop()
 end
