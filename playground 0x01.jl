@@ -6,7 +6,7 @@ using Profile, BenchmarkTools
 @enum CellDawShape SQUARE TRIANGLE CIRCLE
 
 gtkCanvas = @GtkCanvas()
-win = GtkWindow(gtkCanvas, "CA", 1000, 1000)
+win = GtkWindow(gtkCanvas, "CA", 1000, 1000, false, true)
 show(gtkCanvas)
 
 # call back for mouse events
@@ -40,10 +40,10 @@ end
     h = height(gtkCanvas)
     w = width(gtkCanvas)
     
-    clearColor = RGB(0.22, 0.23, 0.29)
+    clearColor = RGB(0.14, 0.18, 0.22)
     set_source_rgb(ctx, clearColor.r, clearColor.g, clearColor.b) # 56/255, 60/255, 74/255) - - - ---
     rectangle(ctx, 0, 0, w, h)
-    #fill(ctx)
+    fill(ctx)
 
    # draw_grid(gtkCanvas, 5, 5)
    # stroke(ctx)
@@ -83,14 +83,13 @@ function draw_ca(ctx, h_canvas, w_canvas)
     matrix_h, matrix_w = size(ca.matrix)
     w_cell = round(w_canvas / matrix_w)
     h_cell = round(h_canvas / matrix_h)
-    zeros_color = RGB(0.1, 0.11, 0.12)
-    ones_color = RGB(0.6, 0.32, 0.32)
+    color = RGB(0.6, 0.32, 0.32)
+    set_source_rgb(ctx, color.r, color.g, color.b)
     for i in 0:matrix_h-1, j in 0:matrix_w-1
         value = ca.matrix[i + 1, j + 1]
-        color = value == 1 ? ones_color : zeros_color
-        set_source_rgb(ctx, color.r, color.g, color.b)
-        rectangle(ctx, i * w_cell,  j * h_cell, w_cell - 1, h_cell - 1)
-        fill(ctx)
+        if value == 1
+            rectangle(ctx, i * w_cell,  j * h_cell, w_cell - 1, h_cell - 1)    
+        end
     end
 end
 
@@ -283,8 +282,8 @@ function tick_ca!(ca::CellularAutomata, steps)
 end
 
 # init ca
-target_frequency = 24
-s = 300
+target_frequency =10
+s = 600
 w, h = s, s
 matrix = [ rand([0,1]) for i = 1:h, j = 1:w ]
 ca = CellularAutomata(matrix)
