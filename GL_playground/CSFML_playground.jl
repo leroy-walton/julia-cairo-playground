@@ -89,12 +89,8 @@ while (running)
 
 end
 
-
 sfText_destroy(text)
 sfFont_destroy(font)
 sfSprite_destroy(sprite)
 sfTexture_destroy(texture)
 sfRenderWindow_destroy(window)
-
-
-
