@@ -49,12 +49,26 @@ event_ref = Ref{sfEvent}()
 #     sfEvtTouchEnded = 21
 #     sfEvtSensorChanged = 22
 #     sfEvtCount = 23
+clock = sfClock_create()
+t0 = get_time(clock)
 
+# Let's express time in seconds.
+function get_time(clock ::Ptr{Nothing})
+    sfTime_asSeconds(sfClock_getElapsedTime(clock))
+end
+function restart(clock ::Ptr{Nothing})
+     sfTime_asSeconds(sfClock_restart(clock))
+end
+
+target_frequency = 24.0
 running = true
-
 while (running)
 
     while Bool(sfRenderWindow_isOpen(window)) && running
+        frame_time = get_time(clock) - t0
+        t0 = get_time(clock)
+        actual_frequency = 1 / frame_time
+        println("Frequency : $actual_frequency Hz")
         # process events
         while Bool(sfRenderWindow_pollEvent(window, event_ref))
             # close window : exit
@@ -70,7 +84,7 @@ while (running)
             event_ref[].type == sfEvtMouseButtonPressed && println("Trigger sfEvtMouseButtonPressed: $(event_ref[].mouseButton.button)")
             event_ref[].type == sfEvtMouseButtonReleased && println("Trigger sfEvtMouseButtonReleased: $(event_ref[].mouseButton.x), $(event_ref[].mouseButton.y)")
             event_ref[].type == sfEvtMouseMoved && println("Trigger sfEvtMouseMoved: $(event_ref[].mouseMove.x), $(event_ref[].mouseMove.y)")
-
+            
             if event_ref[].type == sfEvtClosed
                 running = false
                 println("Render window closed.")
@@ -79,22 +93,37 @@ while (running)
                 println("Viewport updated.")
             end
         end
-
+        time_event_processing = round(get_time(clock) - t0, digits=9)
+        println("Event processing took $time_event_processing seconds.")
+        
         # Render scene
-        sfRenderWindow_clear(window, sfColor_fromRGBA(0,0,0,1))
+
+        sfRenderWindow_clear(window, sfColor_fromRGBA(24,20,18,255))
         sfRenderWindow_drawSprite(window, sprite, C_NULL)
         sfRenderWindow_drawText(window, text, C_NULL)
+        
+        circle = sfCircleShape_create()
+        sfCircleShape_setRadius(circle, 30)
+        sfCircleShape_setPosition(circle, sfVector2f(80,sin(get_time(clock)*3)*200+220))
+        sfCircleShape_setFillColor(circle,sfColor_fromRGBA(255,155,105,255) )
+        sfCircleShape_setOutlineColor(circle , sfColor_fromRGBA(255,155,125,255) )
+        
+        sfRenderWindow_drawCircleShape(window,circle, C_NULL)        
+
         sfRenderWindow_display(window)
+        time_render = round(get_time(clock) - time_event_processing - t0, digits=9)
+        println("Rendering took $time_render seconds.")
+
+        time_to_sleep = 1 / target_frequency - time_render - time_event_processing
+        if time_to_sleep > 0.001
+            sleep(time_to_sleep)
+        end
     end
 
 end
-
 
 sfText_destroy(text)
 sfFont_destroy(font)
 sfSprite_destroy(sprite)
 sfTexture_destroy(texture)
 sfRenderWindow_destroy(window)
-
-
-
