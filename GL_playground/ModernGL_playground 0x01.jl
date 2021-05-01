@@ -1,6 +1,6 @@
 import GLFW
 using ModernGL
-include("gl_utils.jl")
+include("ModernGL_utils.jl")
 
 function is_ci()
 	get(ENV, "TRAVIS", "") == "true" || get(ENV, "APPVEYOR", "") == "True" || get(ENV, "CI", "") == "True"

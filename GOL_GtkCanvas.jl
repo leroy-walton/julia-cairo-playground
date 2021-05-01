@@ -1,9 +1,7 @@
+# Conway's Game Of Life in a GtkCanvas
+
 using Gtk, Images
 using Profile, BenchmarkTools
-
-#TODO: CA Rules can be coded with 512 bits
-
-@enum CellDawShape SQUARE TRIANGLE CIRCLE
 
 gtkCanvas = @GtkCanvas()
 win = GtkWindow(gtkCanvas, "CA", 1000, 1000, false, true)
@@ -23,7 +21,8 @@ gtkCanvas.mouse.button1press = @guarded (widget, event) -> begin
 end
 
 @guarded draw(gtkCanvas) do widget
-    #     BenchmarkTools.Trial: 
+    # Called by the main loop at specific frequency
+
     #   memory estimate:  16 bytes
     #   allocs estimate:  1
     #   --------------
@@ -34,8 +33,7 @@ end
     #   --------------
     #   samples:          10000
     #   evals/sample:     1
-
-    # Called by the main loop at specific frequency
+   
     ctx = getgc(gtkCanvas)
     h = height(gtkCanvas)
     w = width(gtkCanvas)
@@ -119,11 +117,9 @@ mutable struct CellularAutomata
     matrix
 end
 
-
-
 function gol_number_of_adjacent_cells_slow(i, j, previous_state_matrix)
-    ## straight forward implementation but very slow :
-    #     BenchmarkTools.Trial: 
+    # elegant implementation but very slow :
+
     #   memory estimate:  42.81 KiB
     #   allocs estimate:  9
     #   --------------
@@ -149,8 +145,8 @@ function gol_number_of_adjacent_cells_slow(i, j, previous_state_matrix)
 end
 
 function gol_number_of_adjacent_cells(i, j, matrix)
-    ## faster implementation :
-    #     BenchmarkTools.Trial: 
+    # faster implementation :
+
     #   memory estimate:  0 bytes
     #   allocs estimate:  0
     #   --------------
@@ -267,7 +263,6 @@ end
 
 function tick_ca!(ca::CellularAutomata)
     h, w = size(ca.matrix)
-    #ca.matrix = [ rand([0,1]) for i = 1:h, j = 1:w ]
     next_matrix = similar(ca.matrix)
     for i=1:w, j=1:h
         next_matrix[i,j] = gol_compute_next_state(i, j, ca.matrix)
@@ -276,7 +271,7 @@ function tick_ca!(ca::CellularAutomata)
 end
 
 function tick_ca!(ca::CellularAutomata, steps)
-        for _ = 1:steps
+    for _ = 1:steps
         tick_ca!(ca)
     end
 end
@@ -304,10 +299,9 @@ function main_loop()
     if time_to_sleep > 0
         sleep(1 / target_frequency - draw_time)
     end
-    println("* tick time : $(round(tick_time, digits=9)) ")
-    println("- draw time : $(round(draw_time, digits=9)) ")
+    println("* ca tick  time : $(round(tick_time, digits=9)) ")
+    println("- grk draw time : $(round(draw_time, digits=9)) ")
     
-    #println("target tick frequency : $target_frequency")
     actual_frequency = 1/(time()-t)
     println("                             actual tick frequency : $actual_frequency")
 end
