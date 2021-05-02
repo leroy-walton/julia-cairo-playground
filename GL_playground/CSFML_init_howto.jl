@@ -19,8 +19,10 @@ font = sfFont_createFromFile(joinpath("/julia/playgrounds/resources/NotoSans-Bla
 
 text = sfText_create()
 sfText_setString(text, "The quick brown fox jumps over the lazy dog.")
+sfText_setPosition(text, sfVector2f(100,5))
 sfText_setFont(text, font)
 sfText_setCharacterSize(text, 20)
+
 
 event_ref = Ref{sfEvent}()
 
@@ -50,7 +52,6 @@ event_ref = Ref{sfEvent}()
 #     sfEvtSensorChanged = 22
 #     sfEvtCount = 23
 clock = sfClock_create()
-t0 = get_time(clock)
 
 # Let's express time in seconds.
 function get_time(clock ::Ptr{Nothing})
@@ -62,13 +63,15 @@ end
 
 target_frequency = 24.0
 running = true
+t0 = 9999999
 while (running)
 
     while Bool(sfRenderWindow_isOpen(window)) && running
-        frame_time = get_time(clock) - t0
+        frame_timestamp = get_time(clock)
+        frame_time = frame_timestamp - t0
         t0 = get_time(clock)
         actual_frequency = 1 / frame_time
-        println("Frequency : $actual_frequency Hz")
+        
         # process events
         while Bool(sfRenderWindow_pollEvent(window, event_ref))
             # close window : exit
@@ -91,10 +94,15 @@ while (running)
             elseif event_ref[].type == sfEvtResized
                 glViewport(9, 9, event_ref[].size.width, event_ref[].size.height)
                 println("Viewport updated.")
+            elseif event_ref[].type == sfEvtKeyPressed
+                if event_ref[].key.code == sfKeyQ
+                    running = false
+                    println("Quiting application.")
+                end
             end
         end
         time_event_processing = round(get_time(clock) - t0, digits=9)
-        println("Event processing took $time_event_processing seconds.")
+        #println("Event processing took $time_event_processing seconds.")
         
         # Render scene
 
@@ -102,21 +110,59 @@ while (running)
         sfRenderWindow_drawSprite(window, sprite, C_NULL)
         sfRenderWindow_drawText(window, text, C_NULL)
         
-        circle = sfCircleShape_create()
-        sfCircleShape_setRadius(circle, 30)
-        sfCircleShape_setPosition(circle, sfVector2f(80,sin(get_time(clock)*3)*200+220))
-        sfCircleShape_setFillColor(circle,sfColor_fromRGBA(255,155,105,255) )
-        sfCircleShape_setOutlineColor(circle , sfColor_fromRGBA(255,155,125,255) )
+        # circle = sfCircleShape_create()
+        # sfCircleShape_setRadius(circle, 30)
         
-        sfRenderWindow_drawCircleShape(window,circle, C_NULL)        
+        # sfCircleShape_setPosition(circle, sfVector2f(80+cos(frame_timestamp*22)*20, 240+sin(frame_timestamp*3)*200))
+        # sfCircleShape_setFillColor(circle,sfColor_fromRGBA(255,155,105,255) )
+        # sfCircleShape_setOutlineColor(circle , sfColor_fromRGBA(255,155,125,255) )
+        
+
+        square = sfRectangleShape_create()
+        sfRectangleShape_setSize(square, sfVector2f(50,50) )
+        sfRectangleShape_setPosition(square, sfVector2f(80+cos(frame_timestamp*22)*20, 240+sin(frame_timestamp*3)*200))
+        sfRectangleShape_setFillColor(square,sfColor_fromRGBA(255,155,105,255) )
+
+
+        sfRenderWindow_drawRectangleShape(window, square, C_NULL) 
+        # --sfRenderStates
+        # state.shader = shader;
+        # state.blendMode = sfBlendAlpha;
+        # state.transform = sfTransform_Identity;
+        # state.texture = NULL;
+        # struct sfRenderStates
+        #     blendMode::sfBlendMode
+        #     transform::sfTransform
+        #     texture::Ptr{sfTexture}
+        #     shader::Ptr{sfShader}
+        # end
+
+        # --shader
+        # string frag = r"void main() { gl_FragColor = vec4(1,0,0,1); }";
+        # sfShader* shader = sfShader_createFromMemory(null, frag);
+        # sf::Shader shader; shader.loadFromMemory(frag, sf::Shader::Fragment);
+        
+        time_render = round(get_time(clock) - time_event_processing - t0, digits=9)
+        
+        sf_text = sfText_create()
+        sfText_setPosition(sf_text, sfVector2f(4,700))
+        sfText_setString(sf_text, "frame render time : $time_render seconds.")
+        sfText_setFont(sf_text, font)
+        sfText_setCharacterSize(sf_text, 14)
+        sfRenderWindow_drawText(window, sf_text, C_NULL)
+
+        sf_text2 = sfText_create()
+        sfText_setPosition(sf_text2, sfVector2f(4,680))
+        sfText_setString(sf_text2, "fps : $actual_frequency")
+        sfText_setFont(sf_text2, font)
+        sfText_setCharacterSize(sf_text2, 14)
+        sfRenderWindow_drawText(window, sf_text2, C_NULL)
 
         sfRenderWindow_display(window)
-        time_render = round(get_time(clock) - time_event_processing - t0, digits=9)
-        println("Rendering took $time_render seconds.")
-
         time_to_sleep = 1 / target_frequency - time_render - time_event_processing
+        
         if time_to_sleep > 0.001
-            sleep(time_to_sleep)
+            sleep(time_to_sleep-0.005)
         end
     end
 
