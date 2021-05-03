@@ -68,8 +68,8 @@ while (running)
 
     while Bool(sfRenderWindow_isOpen(window)) && running
         frame_timestamp = get_time(clock)
+        t0 = frame_timestamp
         frame_time = frame_timestamp - t0
-        t0 = get_time(clock)
         actual_frequency = 1 / frame_time
         
         # process events
