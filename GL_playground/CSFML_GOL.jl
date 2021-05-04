@@ -1,6 +1,4 @@
 using CSFML.LibCSFML
-using ModernGL
-using Profile, BenchmarkTools
 
 mutable struct CellularAutomata
     matrix
@@ -123,7 +121,7 @@ function gol_compute_next_state(i, j, previous_state_matrix)
     next_state
 end
 
-function tick_ca!(ca::CellularAutomata)
+function update_ca!(ca::CellularAutomata)
     h, w = size(ca.matrix)
     next_matrix = similar(ca.matrix)
     for i=1:w, j=1:h
@@ -132,31 +130,16 @@ function tick_ca!(ca::CellularAutomata)
     ca.matrix = next_matrix
 end
 
-function tick_ca!(ca::CellularAutomata, steps)
-    for _ = 1:steps
-        tick_ca!(ca)
-    end
-end
-
-function draw_scene(window)
-    size = sfRenderWindow_getSize(window)
-
-    h = size.x
-    w = size.y
-    
-    draw_ca(window)
-end
-
-function draw_ca(window)
+function draw_ca(window,ca,cell_size)
     matrix_h, matrix_w = size(ca.matrix)
-    w_cell = w_canvas / matrix_w
-    h_cell = h_canvas / matrix_h
-
+    square = sfRectangleShape_create()
+    sfRectangleShape_setSize(square, sfVector2f(cell_size,cell_size) )
+    sfRectangleShape_setFillColor(square,sfColor_fromRGBA(255,155,105,255) )
     for i in 0:matrix_h-1, j in 0:matrix_w-1
         value = ca.matrix[i + 1, j + 1]
-        if value == 1
-            #rectangle(ctx, i * w_cell,  j * h_cell, w_cell - 1, h_cell - 1)    
-
+        if value == 1  
+            sfRectangleShape_setPosition(square, sfVector2f(cell_size*i, cell_size*j) )
+            sfRenderWindow_drawRectangleShape(window, square, C_NULL)
         end
     end
 end
@@ -176,10 +159,17 @@ println("""=====================================================================
                                   
 ===============================================================================================""")
 
+Config = (
+    window_size         = 500    ,   # pixels
+    ca_matrix_size      = 50      ,   # matrix size
+    target_frequency    = 10           # CA updates per seconds.
+)
 
 # init window
-mode = sfVideoMode(700, 720, 32)
-window = sfRenderWindow_create(mode, "SFML window", sfResize | sfClose, C_NULL)
+window_height = Config.window_size
+window_width = Config.window_size
+mode = sfVideoMode(window_height, window_width, 32)
+window = sfRenderWindow_create(mode, "Game Of Life", sfResize | sfClose, C_NULL)
 @assert window != C_NULL
 sfWindow_setVerticalSyncEnabled(window,true)
 sfWindow_setActive(window, sfTrue)
@@ -189,11 +179,13 @@ font = sfFont_createFromFile(joinpath("/julia/playgrounds/resources/NotoSans-Bla
 @assert font != C_NULL
 
 # init ca
-target_frequency =10
-s = 600
+s = Config.ca_matrix_size
 w, h = s, s
 matrix = [ rand([0,1]) for i = 1:h, j = 1:w ]
 ca = CellularAutomata(matrix)
+
+# init matrix rendering engine
+cell_size = Config.window_size / s
 
 # init clock
 clock = sfClock_create()
@@ -206,18 +198,22 @@ function restart(clock ::Ptr{Nothing})
 end
 
 event_ref = Ref{sfEvent}()
-target_frequency = 24.0
-t0 = 9999999
+target_frequency = Config.target_frequency
+frame_start_timestamp = -Inf
+time_frame_computing = 0
+
 running = true
 while (running)
 
     while Bool(sfRenderWindow_isOpen(window)) && running
-        frame_timestamp = get_time(clock)
-        frame_time = frame_timestamp - t0
-        t0 = get_time(clock)
+
+        previous_frame_timestamp = frame_start_timestamp
+        
+#       # process events
+        frame_start_timestamp = get_time(clock)
+        frame_time = frame_start_timestamp - previous_frame_timestamp
         actual_frequency = 1 / frame_time
         
-        # process events
         while Bool(sfRenderWindow_pollEvent(window, event_ref))
             if event_ref[].type == sfEvtClosed
                 sfRenderWindow_close(window)
@@ -233,40 +229,74 @@ while (running)
                 end
             end
         end
-        time_event_processing = round(get_time(clock) - t0, digits=9)
+        
+#       # update CA
+        ca_start_timestamp = get_time(clock)
+        time_event_processing = ca_start_timestamp - frame_start_timestamp
         #println("Event processing took $time_event_processing seconds.")
         
-        # Render scene
+        update_ca!(ca)
+
+#       # draw scene
+        drawscene_start_timestamp = get_time(clock)
+        time_update_ca = drawscene_start_timestamp - ca_start_timestamp
+
         sfRenderWindow_clear(window, sfColor_fromRGBA(24,20,18,255))
         
-        square = sfRectangleShape_create()
-        sfRectangleShape_setSize(square, sfVector2f(50,50) )
-        t_warp = frame_timestamp + sin(frame_timestamp*2.2)*1.5
-        sfRectangleShape_setPosition(square, sfVector2f(80+cos(t_warp*2.3)*20, 240+sin(t_warp*1.8)*200))
-        sfRectangleShape_setFillColor(square,sfColor_fromRGBA(255,155,105,255) )
+        # ----------------------------------------------------------------------------
+        draw_ca(window,ca,cell_size)
+        #draw_scene(window,ca,cell_size)
+        # ----------------------------------------------------------------------------
 
-        sfRenderWindow_drawRectangleShape(window, square, C_NULL) 
+#       # draw hud
+        drawhud_start_timestamp = get_time(clock)
+        time_drawscene = drawhud_start_timestamp - drawscene_start_timestamp
 
-        time_render = round(get_time(clock) - time_event_processing - t0, digits=9)
-        
         sf_text = sfText_create()
-        sfText_setPosition(sf_text, sfVector2f(4,700))
-        sfText_setString(sf_text, "frame render time : $time_render seconds.")
+        sfText_setPosition(sf_text, sfVector2f(4,window_height-20))
+        sfText_setString(sf_text, "frame computing time : $time_frame_computing seconds.")
         sfText_setFont(sf_text, font)
         sfText_setCharacterSize(sf_text, 14)
         sfRenderWindow_drawText(window, sf_text, C_NULL)
 
         sf_text2 = sfText_create()
-        sfText_setPosition(sf_text2, sfVector2f(4,680))
+        sfText_setPosition(sf_text2, sfVector2f(4,window_height-40))
         sfText_setString(sf_text2, "fps : $actual_frequency")
         sfText_setFont(sf_text2, font)
         sfText_setCharacterSize(sf_text2, 14)
         sfRenderWindow_drawText(window, sf_text2, C_NULL)
 
+#       # render
+        render_start_timestamp = get_time(clock)
         sfRenderWindow_display(window)
-        time_to_sleep = 1 / target_frequency - time_render - time_event_processing
+#       # computing end 
+        frame_end_timestamp = get_time(clock)
         
-        if time_to_sleep > 0.001
+        time_render = frame_end_timestamp - render_start_timestamp
+        
+        
+        time_drawhud = render_start_timestamp - drawhud_start_timestamp         
+        time_frame_computing = frame_end_timestamp - frame_start_timestamp
+
+        time_to_sleep = 1 / target_frequency - time_frame_computing
+
+        time_sum = time_event_processing +
+             time_drawscene +
+             time_drawhud +
+             time_render
+
+        time_report = """
+        **
+        event processing         : $time_event_processing
+        draw scene               : $time_drawscene
+        draw hud                 : $time_drawhud
+        render                   : $time_render
+        time sum                 : $time_sum
+        time computing frame     : $time_frame_computing
+    
+        """
+        println(time_report)
+        if time_to_sleep > 0.005
             sleep(time_to_sleep-0.005)
         end
     end
