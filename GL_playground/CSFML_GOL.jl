@@ -238,8 +238,8 @@ while (running)
         update_ca!(ca)
 
 #       # draw scene
-        drawscene_start_timestamp = get_time(clock)
-        time_update_ca = drawscene_start_timestamp - ca_start_timestamp
+        drawca_start_timestamp = get_time(clock)
+        time_update_ca = drawca_start_timestamp - ca_start_timestamp
 
         sfRenderWindow_clear(window, sfColor_fromRGBA(24,20,18,255))
         
@@ -250,7 +250,7 @@ while (running)
 
 #       # draw hud
         drawhud_start_timestamp = get_time(clock)
-        time_drawscene = drawhud_start_timestamp - drawscene_start_timestamp
+        time_drawca = drawhud_start_timestamp - drawca_start_timestamp
 
         sf_text = sfText_create()
         sfText_setPosition(sf_text, sfVector2f(4,window_height-20))
@@ -281,14 +281,14 @@ while (running)
         time_to_sleep = 1 / target_frequency - time_frame_computing
 
         time_sum = time_event_processing +
-             time_drawscene +
+             time_drawca +
              time_drawhud +
              time_render
 
         time_report = """
         **
         event processing         : $time_event_processing
-        draw scene               : $time_drawscene
+        draw Cellular Automata   : $time_drawca
         draw hud                 : $time_drawhud
         render                   : $time_render
         time sum                 : $time_sum
