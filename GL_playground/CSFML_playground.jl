@@ -63,7 +63,7 @@ end
 
 target_frequency = 24.0
 running = true
-t0 = 9999999
+t0 = 0
 while (running)
 
     while Bool(sfRenderWindow_isOpen(window)) && running
