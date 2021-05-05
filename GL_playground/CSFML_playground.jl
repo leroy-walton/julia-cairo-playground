@@ -101,7 +101,7 @@ while (running)
                 end
             end
         end
-        time_event_processing = round(get_time(clock) - t0, digits=9)
+        time_event_processing = get_time(clock) - t0
         #println("Event processing took $time_event_processing seconds.")
         
         # Render scene
@@ -143,7 +143,7 @@ while (running)
         # sfShader* shader = sfShader_createFromMemory(null, frag);
         # sf::Shader shader; shader.loadFromMemory(frag, sf::Shader::Fragment);
         
-        time_render = round(get_time(clock) - time_event_processing - t0, digits=9)
+        time_render = get_time(clock) - time_event_processing - t0
         
         sf_text = sfText_create()
         sfText_setPosition(sf_text, sfVector2f(4,700))
@@ -162,8 +162,8 @@ while (running)
         sfRenderWindow_display(window)
         time_to_sleep = 1 / target_frequency - time_render - time_event_processing
         
-        if time_to_sleep > 0.0001
-            sleep(time_to_sleep-0.0001)
+        if time_to_sleep > 0.005
+            sleep(time_to_sleep-0.005)
         end
     end
 
