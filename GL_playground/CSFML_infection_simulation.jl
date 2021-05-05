@@ -7,10 +7,6 @@ struct Coordinate
 	y::Int64
 end
 
-function make_tuple(c)
-	(c.x, c.y)
-end
-
 function Base.:+(a::Coordinate, b::Coordinate)
 	Coordinate(a.x+b.x,a.y+b.y)
 end
@@ -62,9 +58,9 @@ function initialize(N::Number, L::Number)
 end
 
 function getColor(s::InfectionStatus) 
-    color_I = RGB(0.4, 0.5, 1.0) 
-    color_R = RGB(1.0, 0.4 ,0.4 )
-    color_S = RGB(0.4, 1.0, 0.4)
+    color_S = RGB(0.4, 0.5, 1.0) 
+    color_I = RGB(1.0, 0.4 ,0.4 )
+    color_R = RGB(0.4, 1.0, 0.4)
 
     if s == S
         color_S
@@ -106,7 +102,6 @@ function interact!(agent::Agent, source::Agent, infection::CollisionInfectionRec
 end
 
 function step!(agents::Vector, L::Number, infection::AbstractInfection)
-
 	a = rand(agents)
 	a.position = collide_boundary(a.position+rand(possible_moves), L)
 	#interact
@@ -118,6 +113,12 @@ function step!(agents::Vector, L::Number, infection::AbstractInfection)
 	agents
 end
 
+function sweep!(agents::Vector, L::Number, infection::AbstractInfection)
+    for _ in 1:length(agents)
+        step!(agents, L, infection)
+    end
+	agents
+end
 
 #===================================================================================================
 
@@ -135,15 +136,15 @@ end
 
 # init simulation
 
-number_of_agents = 50
-L=40
+number_of_agents = 600
+L=100
 
 agents = initialize(number_of_agents, L)
 pandemic = CollisionInfectionRecovery( 0.3, 0.01 )
 
 # init rendering engine
 
-target_frequency = 20.0
+target_frequency = 60.0
 
 mode = sfVideoMode(1000, 1000, 32)
 window = sfRenderWindow_create(mode, "SFML window", sfResize | sfClose, C_NULL)
@@ -164,7 +165,6 @@ function restart(clock ::Ptr{Nothing})
      sfTime_asSeconds(sfClock_restart(clock))
 end
 
-
 function drawSquare(window, square, x, y, color::RGB)
         function f2i(f)
             round(f*255)
@@ -178,8 +178,6 @@ function drawSquare(window, square, x, y, color::RGB)
 
         sfRenderWindow_drawRectangleShape(window, square, C_NULL) 
 end
-
-
 
 # main loop
 
@@ -222,14 +220,13 @@ while (running)
         sfRectangleShape_setSize(square, sfVector2f(s,s) )
         sfRectangleShape_setFillColor(square,sfColor_fromRGBA(255,155,105,255) )
 
-    
         for a in agents
-            x = a.position.x * 20
-            y = a.position.y * 20
+            x = (a.position.x + L )* 1000/(2L) * 0.98
+            y = (a.position.y + L )* 1000/(2L) * 0.98
             drawSquare(window, square, x, y, getColor(a) )
         end
 
-        step!(agents, L, pandemic)
+        sweep!(agents, L, pandemic)
 
         time_render = get_time(clock) - time_event_processing - t0
         
@@ -248,7 +245,6 @@ while (running)
         sfRenderWindow_drawText(window, sf_text2, C_NULL)
 
         sfRenderWindow_display(window)
-        sleep(0.002)
         time_to_sleep = 1 / target_frequency - time_render - time_event_processing
         if time_to_sleep > 0.005
             sleep(time_to_sleep-0.005)
