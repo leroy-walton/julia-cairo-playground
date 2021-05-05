@@ -69,7 +69,7 @@ while (running)
     while Bool(sfRenderWindow_isOpen(window)) && running
         frame_timestamp = get_time(clock)
         frame_time = frame_timestamp - t0
-        t0 = get_time(clock)
+        t0 = frame_timestamp
         actual_frequency = 1 / frame_time
         
         # process events
@@ -161,7 +161,7 @@ while (running)
         sfRenderWindow_display(window)
         time_to_sleep = 1 / target_frequency - time_render - time_event_processing
         
-        if time_to_sleep > 0.001
+        if time_to_sleep > 0.005
             sleep(time_to_sleep-0.005)
         end
     end
