@@ -2,6 +2,9 @@ using CSFML.LibCSFML
 using ColorTypes
 using ModernGL
 
+# fully discrete, stochastic agent-based simulation for the SIR infection model.
+# https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology
+
 struct Coordinate
 	x::Int64
 	y::Int64
@@ -221,8 +224,8 @@ while (running)
         sfRectangleShape_setFillColor(square,sfColor_fromRGBA(255,155,105,255) )
 
         for a in agents
-            x = (a.position.x + L )* 1000/(2L) * 0.98
-            y = (a.position.y + L )* 1000/(2L) * 0.98
+            x = (a.position.x + L )* 1000/(2L)
+            y = (a.position.y + L )* 1000/(2L)
             drawSquare(window, square, x, y, getColor(a) )
         end
 
