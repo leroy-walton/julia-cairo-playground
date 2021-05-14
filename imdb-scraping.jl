@@ -92,7 +92,7 @@ function getUrlCastFromTitleId(id::String)
 end
 
 function fetch_movie(id::String)
-    
+    print("fetch_movie($id)-")
     movie = Movie()
     cast = Cast()
     movie.id = id
@@ -103,18 +103,33 @@ function fetch_movie(id::String)
     head = doc.root[1]
     body = doc.root[2]
     
+    print("Main-")
+
     # movie
     movie.id = eachmatch(sel"[property=pageId]", head)[1].attributes["content"]
     movie.title = strip(eachmatch(sel".title_wrapper > h1", body)[1][1].text)
-    movie.year =  eachmatch(sel".title_wrapper > h1", body)[1][2][2][1].text
-    movie.rating = eachmatch(sel"[itemprop=ratingValue]", body)[1][1].text
+    try
+        movie.year =  eachmatch(sel".title_wrapper > h1", body)[1][2][2][1].text        
+    catch
+        movie.year = "n/a"
+    end
+    try
+        movie.rating = eachmatch(sel"[itemprop=ratingValue]", body)[1][1].text    
+    catch
+        movie.rating ="n/a"
+    end
     movie.genre =  eachmatch(sel".subtext", body)[1][5][1].text
-    movie.time = strip(eachmatch(sel"[datetime]", body)[1][1].text)
-
+    try
+        movie.time = strip(eachmatch(sel"[datetime]", body)[1][1].text)    
+    catch
+        movie.time = "n/a"
+    end
+    
     url = getUrlCastFromTitleId(id)
     doc = parsehtml(String(HTTP.get(url).body))
     body = doc.root[2]
 
+    print("Director-")
     # director
     fullcredits_content = eachmatch(sel"#fullcredits_content", body)
     director_name = strip(fullcredits_content[1][2][2][1][1][1][1].text)
@@ -122,22 +137,29 @@ function fetch_movie(id::String)
     cast_director = Person()
     cast_director.name = director_name
     cast_director.id = director_id
-
+    
+    print("Writers-")
     # writers
     cast_writers = Set{Person}()
-    for i in 1:size(fullcredits_content[1][4][2].children)[1]
-        try
-            writer_name = strip(fullcredits_content[1][4][2][i][1][1][1].text)
-            writer_id = getNameIdFromImdbUrl(fullcredits_content[1][4][2][1][1][1].attributes["href"])
-            writer = Person()
-            writer.name = writer_name
-            writer.id = writer_id
-            push!(cast_writers, writer)
-        catch e
-            println("skipping an entry for writers")
-        end
-    end
     
+    try        
+        for i in 1:size(fullcredits_content[1][4][2].children)[1]
+            try
+                writer_name = strip(fullcredits_content[1][4][2][i][1][1][1].text)
+                writer_id = getNameIdFromImdbUrl(fullcredits_content[1][4][2][1][1][1].attributes["href"])
+                writer = Person()
+                writer.name = writer_name
+                writer.id = writer_id
+                push!(cast_writers, writer)
+            catch e
+                println("skipping an entry for writers")
+            end
+        end
+    catch
+        println("*writers not found")
+    end
+
+    print("Actors-")
     # actors
     table_rows  = eachmatch(sel".cast_list", body)[1].children[1]
     cast_actors = Set{Person}()
@@ -149,25 +171,30 @@ function fetch_movie(id::String)
             actor.id = getNameIdFromImdbUrl(table_rows[i][2][1].attributes["href"])
             push!(cast_actors, actor)
         catch e
-            println("skipping an entry in actor casting")
-        end
-    end
-
-    #producers
-    cast_producers = Set{Person}()
-    for i in 1:size(fullcredits_content[1][8][2].children)[1]
-        try
-            producer_name = strip(fullcredits_content[1][8][2][i][1][1][1].text)
-            producer_id = getNameIdFromImdbUrl(fullcredits_content[1][8][2][i][1][1].attributes["href"])
-            producer = Person()
-            producer.name = producer_name
-            producer.id = producer_id
-            push!(cast_producers, producer)
-        catch e
-            println("skipping an entry for producers")
+            println("*skipping an entry in actor casting")
         end
     end
     
+    println("Producers|")
+    #producers
+    cast_producers = Set{Person}()
+    try
+        for i in 1:size(fullcredits_content[1][8][2].children)[1]
+            try
+                producer_name = strip(fullcredits_content[1][8][2][i][1][1][1].text)
+                producer_id = getNameIdFromImdbUrl(fullcredits_content[1][8][2][i][1][1].attributes["href"])
+                producer = Person()
+                producer.name = producer_name
+                producer.id = producer_id
+                push!(cast_producers, producer)
+            catch e
+                println("*skipping an entry for producers")
+            end
+        end
+    catch
+        println("*no producers found")
+    end
+
     cast.director = cast_director
     cast.producers = cast_producers
     cast.writers = cast_writers
@@ -226,10 +253,10 @@ function test_fetch(id::String)
     url = "https://www.imdb.com/title/$id/fullcredits/"
     doc = parsehtml(String(HTTP.get(url).body))
     body = doc.root[2]
-
+    
     #fullcredits_content = eachmatch(sel"#fullcredits_content", body)
-    #fullcredits_content = eachmatch(sel"#fullcredits_content", body)
-    eachmatch(sel".cast_list", body)[1][1]
+    fullcredits_content = eachmatch(sel"#fullcredits_content", body)
+    writers_table=eachmatch(sel"div.header > h4#writer", body)
 end
 #==================================================================================================#
 
@@ -244,13 +271,16 @@ movid3 = "tt0083944" # rambo
 #serialize("/julia/serialised.test", movie1)
 #movieb = deserialize("/julia/serialised.test")
 
-movie = fetch_movie(movid2)
+#movie = fetch_movie(movid2)
 
 ed = fetch_person(edward_norton_id)
 
-# movies_of_edward_norton = Set{Movie}()
-# for mov_id in ed.movie_ids
-#     push!(movies_of_edward_norton, fetch_movie(mov_id))
-# end
+movies_of_edward_norton = Set{Movie}()
+for mov_id in ed.movie_ids
+    push!(movies_of_edward_norton, fetch_movie(mov_id))
+end
 
+#test_movie = fetch_movie("tt1221815")
+#data = test_fetch("tt1221815")
 
+ 
