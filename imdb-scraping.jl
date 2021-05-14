@@ -11,8 +11,12 @@ println("---")
 mutable struct Person
     id::String
     name::String
+    birthday::String
+    movie_ids::Set{String}
+    job_categories::Set{String}
     Person() = new()
 end
+
 function Base.:(==)(x::Person, y::Person) 
     (x.name == y.name)
 end
@@ -62,9 +66,13 @@ function Base.hash(x::Movie, h::UInt )
 end
 
 function Base.show(io::IO, m::Movie)
-    print(io, m.title , " (", m.year, ")", " [", m.genre, "] ", m.rating )
-    println(io,"")
-    print(io, "    \\_: ", m.cast)
+    print(io, m.title)
+    try
+        print(" (", m.year, ")", " [", m.genre, "] ", m.rating )
+        println(io,"")
+        print(io, "    \\_: ", m.cast)
+    catch e
+    end
 end
 
 function getTitleIdFromImdbUrl(url::String)
@@ -75,14 +83,22 @@ function getNameIdFromImdbUrl(url::String)
     match(r"nm\d*",url).match
 end
 
-function fetchMovie(id::String)
+function getUrlMainFromTitleId(id::String)
+    "https://www.imdb.com/title/$id"
+end
+
+function getUrlCastFromTitleId(id::String)
+    "https://www.imdb.com/title/$id/fullcredits/"
+end
+
+function fetch_movie(id::String)
     
     movie = Movie()
     cast = Cast()
     movie.id = id
     cast.movie_id = id
     
-    url = "https://www.imdb.com/title/$id"
+    url = getUrlMainFromTitleId(id)
     doc = parsehtml(String(HTTP.get(url).body))
     head = doc.root[1]
     body = doc.root[2]
@@ -95,7 +111,7 @@ function fetchMovie(id::String)
     movie.genre =  eachmatch(sel".subtext", body)[1][5][1].text
     movie.time = strip(eachmatch(sel"[datetime]", body)[1][1].text)
 
-    url = "https://www.imdb.com/title/$id/fullcredits/"
+    url = getUrlCastFromTitleId(id)
     doc = parsehtml(String(HTTP.get(url).body))
     body = doc.root[2]
 
@@ -128,7 +144,6 @@ function fetchMovie(id::String)
     s = size(table_rows.children)[1]
     for i in 2:s
         try
-            print("$i ") 
             actor = Person()
             actor.name = strip(table_rows[i][2][1][1].text)
             actor.id = getNameIdFromImdbUrl(table_rows[i][2][1].attributes["href"])
@@ -161,10 +176,57 @@ function fetchMovie(id::String)
     movie
 end
 
+function fetch_person(id)
+    person = Person()
+    person.id = id
+    url="https://www.imdb.com/name/$id/"
+    body = parsehtml(String(HTTP.get(url).body)).root[2]
+    
+    # name
+    name_widget = eachmatch(sel"#name-overview-widget", body)
+    name = name_widget[1][1][1][1][1][1][1][1].text
+    person.name = name
+
+    # birthday
+    overview_top = eachmatch(sel"#overview-top", body)
+    birthday = overview_top[1][3][2].attributes["datetime"]
+    person.birthday = birthday
+
+    # movies
+    filmo = eachmatch(sel".filmo-category-section", body)
+    movie_ids = Set{String}()
+    for i in 1:size(filmo[1].children)[1]
+        try
+            movie_id = getTitleIdFromImdbUrl(filmo[1][i][2][1].attributes["href"])
+            push!(movie_ids, movie_id)
+        catch e
+            prinlnt("skipped an entry for movies")
+        end
+    end
+
+    # job_categories ( "actor" | "producer" | "writer" ...)
+    job_categories_html = eachmatch(sel"#name-job-categories", body)
+    job_categories = Set{String}()
+    for i in 1:size(job_categories_html[1].children)[1]
+        try
+            job_category = lowercase(strip(job_categories_html[1][i][1][1].text))
+            push!(job_categories, job_category)
+        catch e
+            println("skipped an entry for job_categories")
+        end
+    end
+
+    person.movie_ids = movie_ids
+    person.job_categories = job_categories
+    person
+    
+end
+
 function test_fetch(id::String)
     url = "https://www.imdb.com/title/$id/fullcredits/"
     doc = parsehtml(String(HTTP.get(url).body))
     body = doc.root[2]
+
     #fullcredits_content = eachmatch(sel"#fullcredits_content", body)
     #fullcredits_content = eachmatch(sel"#fullcredits_content", body)
     eachmatch(sel".cast_list", body)[1][1]
@@ -173,20 +235,22 @@ end
 
 movies = Set{Movie}()
 persons = Set{Person}()
+edward_norton_id = "nm0001570"
 
-id1 = "tt0120586" #american history x
-id2 = "tt0114814" #the usual suspects
-id3 = "tt0083944" # rambo
+movid1 = "tt0120586" #american history x
+movid2 = "tt0114814" #the usual suspects
+movid3 = "tt0083944" # rambo
 
-movie1 = fetchMovie(id1)
-# movie2 = fetchMovie(id2)
-# movie3 = fetchMovie(id3)
-# push!(movies, movie1)
-# push!(movies, movie2)
-# push!(movies, movie3)
-
-#serialize("/julia/serialised.test", movie)
+#serialize("/julia/serialised.test", movie1)
 #movieb = deserialize("/julia/serialised.test")
 
-data = test_fetch(id1)
+movie = fetch_movie(movid2)
+
+ed = fetch_person(edward_norton_id)
+
+# movies_of_edward_norton = Set{Movie}()
+# for mov_id in ed.movie_ids
+#     push!(movies_of_edward_norton, fetch_movie(mov_id))
+# end
+
 
