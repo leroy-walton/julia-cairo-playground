@@ -103,23 +103,21 @@ function fetchMovie(id::String)
             println("skipping an entry for writers")
         end
     end
-    director = Person()
-    director.name = director_name
-    cast.director = director
-
+    cast_director = Person()
+    cast_director.name = director_name
+    
     # writers
-    writers = Set{Person}()
+    cast_writers = Set{Person}()
     for i in 1:size(fullcredits_content[1][4][2].children)[1]
         try
             writer_name = strip(fullcredits_content[1][4][2][i][1][1][1].text)
             writer = Person()
             writer.name = writer_name
-            push!(writers, writer)
+            push!(writers, cast_writer)
         catch e
             println("skipping an entry for writers")
         end
     end
-    cast.writers = writers
     
     # actors
     table_rows  = eachmatch(sel".cast_list", body)[1].children[1]
@@ -149,7 +147,9 @@ function fetchMovie(id::String)
         end
     end
     
+    cast.director = cast_director
     cast.producers = cast_producers
+    cast.writers = cast_writers
     cast.actors = cast_actors
     movie.cast = cast
     movie
