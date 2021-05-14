@@ -29,6 +29,19 @@ mutable struct Cast
     producers::Set{Person}
     Cast() = new()
 end
+function Base.:(==)(x::Cast, y::Cast) 
+    (x.movie_id == y.movie_id)
+end
+
+function Base.hash(x::Cast, h::UInt )
+    hash(x.movie_id * "Cast")
+end
+
+function Base.show(io::IO, cast::Cast)
+    for person in cast.actors
+        print(io, person.name, "|")
+    end
+end
 
 mutable struct Movie
     id::String
@@ -40,64 +53,151 @@ mutable struct Movie
     cast::Cast
     Movie() = new()
 end
-
-function getMovie(id::String)
-    
+function Base.:(==)(x::Movie, y::Movie) 
+    (x.id == y.id)
 end
 
+function Base.hash(x::Movie, h::UInt )
+    hash(x.id)
+end
+
+function Base.show(io::IO, m::Movie)
+    print(io, m.title , " (", m.year, ")", " [", m.genre, "] ", m.rating )
+    println(io,"")
+    print(io, "    \\_: ", m.cast)
+end
+
+function fetchMovie(id::String)
+    
+    movie = Movie()
+    cast = Cast()
+    movie.id = id
+    cast.movie_id = id
+    
+    url = "https://www.imdb.com/title/$id"
+    doc = parsehtml(String(HTTP.get(url).body))
+    head = doc.root[1]
+    body = doc.root[2]
+    
+    # movie
+    movie.id = eachmatch(sel"[property=pageId]", head)[1].attributes["content"]
+    movie.title = strip(eachmatch(sel".title_wrapper > h1", body)[1][1].text)
+    movie.year =  eachmatch(sel".title_wrapper > h1", body)[1][2][2][1].text
+    movie.rating = eachmatch(sel"[itemprop=ratingValue]", body)[1][1].text
+    movie.genre =  eachmatch(sel".subtext", body)[1][5][1].text
+    movie.time = strip(eachmatch(sel"[datetime]", body)[1][1].text)
+
+    url = "https://www.imdb.com/title/$id/fullcredits/"
+    doc = parsehtml(String(HTTP.get(url).body))
+    body = doc.root[2]
+
+    # director
+    fullcredits_content = eachmatch(sel"#fullcredits_content", body)
+    director_name = strip(fullcredits_content[1][2][2][1][1][1][1].text)
+    writers = []
+    for i in 1:size(fullcredits_content[1][4][2].children)[1]
+        try
+            w = strip(fullcredits_content[1][4][2][i][1][1][1].text)
+            push!(writers,w)
+        catch e
+            println("skipping an entry for writers")
+        end
+    end
+    director = Person()
+    director.name = director_name
+    cast.director = director
+
+    # writers
+    writers = Set{Person}()
+    for i in 1:size(fullcredits_content[1][4][2].children)[1]
+        try
+            writer_name = strip(fullcredits_content[1][4][2][i][1][1][1].text)
+            writer = Person()
+            writer.name = writer_name
+            push!(writers, writer)
+        catch e
+            println("skipping an entry for writers")
+        end
+    end
+    cast.writers = writers
+    
+    # actors
+    table_rows  = eachmatch(sel".cast_list", body)[1].children[1]
+    cast_actors = Set{Person}()
+    s = size(table_rows.children)[1]
+    for i in 2:s
+        try
+            print("$i ") 
+            actor = Person()
+            actor.name = strip(table_rows[i][2][1][1].text)
+            push!(cast_actors, actor)
+        catch e
+            println("skipping an entry in actor casting")
+        end
+    end
+
+    #producers
+    cast_producers = Set{Person}()
+    for i in 1:size(fullcredits_content[1][8][2].children)[1]
+        try
+            producer_name = strip(fullcredits_content[1][8][2][i][1][1][1].text)
+            producer = Person()
+            producer.name = producer_name
+            push!(cast_producers, producer)
+        catch e
+            println("skipping an entry for producers")
+        end
+    end
+    
+    cast.producers = cast_producers
+    cast.actors = cast_actors
+    movie.cast = cast
+    movie
+end
+
+function test_fetch(id::String)
+    url = "https://www.imdb.com/title/$id/fullcredits/"
+    doc = parsehtml(String(HTTP.get(url).body))
+    body = doc.root[2]
+    #fullcredits_content = eachmatch(sel"#fullcredits_content", body)
+    
+    
+   # actors
+   table_rows  = eachmatch(sel".cast_list", body)[1].children[1]
+   cast_actors = Set{Person}()
+   s = size(table_rows.children)[1]
+   println("size = $s")
+   for i in 2:s
+       try
+           print("$i ") 
+           actor = Person()
+           actor.name = strip(table_rows[i][2][1][1].text)
+           push!(cast_actors, actor)
+       catch e
+           println("skipping an entry in actor casting")
+           println(e)
+       end
+   end
+   table_rows
+end
 #==================================================================================================#
 
 movies = Set{Movie}()
 persons = Set{Person}()
 
-#id = "tt0120586" #american history x
-#id = "tt0114814" #the usual suspects
-id = "tt0083944" # rambo
+id1 = "tt0120586" #american history x
+id2 = "tt0114814" #the usual suspects
+id3 = "tt0083944" # rambo
 
-url = "https://www.imdb.com/title/$id"
-doc = parsehtml(String(HTTP.get(url).body))
-head = doc.root[1]
-body = doc.root[2]
+movie1 = fetchMovie(id1)
+movie2 = fetchMovie(id2)
+movie3 = fetchMovie(id3)
+# push!(movies, movie1)
+# push!(movies, movie2)
+# push!(movies, movie3)
 
-movie = Movie()
-movie.id = eachmatch(sel"[property=pageId]", head)[1].attributes["content"]
-movie.title = strip(eachmatch(sel".title_wrapper > h1", body)[1][1].text)
-movie.year =  eachmatch(sel".title_wrapper > h1", body)[1][2][2][1].text
-movie.rating = eachmatch(sel"[itemprop=ratingValue]", body)[1][1].text
-movie.genre =  eachmatch(sel".subtext", body)[1][5][1].text
-movie.time = strip(eachmatch(sel"[datetime]", body)[1][1].text)
+#serialize("/julia/serialised.test", movie)
+#movieb = deserialize("/julia/serialised.test")
 
-println(movie)
+#data = test_fetch(id1)
 
-url = "https://www.imdb.com/title/$id/fullcredits/"
-
-doc = parsehtml(String(HTTP.get(url).body))
-body = doc.root[2]
-
-cast = Cast()
-
-table_rows  = eachmatch(sel".cast_list", body)[1].children[1]
-#cast_persons = []
-cast_persons = Set()
-s = size(table_rows.children)[1]
-println(s)
-for i in 2:s
-    try
-        print("$i ") 
-        person = Person()
-        person.name = strip(table_rows[i][2][1][1].text)
-        push!(cast_persons, person)
-        println(person.name)
-    catch e
-        println(" /!\\ no name found in this children")
-    end
-    
-end
-cast.actors = cast_persons
-
-movie.cast = cast
-movie
-
-serialize("/julia/serialised.test", movie)
-
-movieb = deserialize("/julia/serialised.test")
