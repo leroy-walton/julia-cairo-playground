@@ -68,7 +68,7 @@ end
 function Base.show(io::IO, m::Movie)
     print(io, m.title)
     try
-        print(" (", m.year, ")", " [", m.genre, "] ", m.rating )
+        print(io, " (", m.year, ")", " [", m.genre, "] ", m.rating )
         println(io,"")
         print(io, "    \\_: ", m.cast)
     catch e
@@ -118,7 +118,7 @@ function fetch_movie(id::String)
     catch
         movie.rating ="n/a"
     end
-    movie.genre =  eachmatch(sel".subtext", body)[1][5][1].text
+    movie.genre =  strip(eachmatch(sel".subtext", body)[1][5][1].text)
     try
         movie.time = strip(eachmatch(sel"[datetime]", body)[1][1].text)    
     catch
@@ -227,7 +227,7 @@ function fetch_person(id)
             movie_id = getTitleIdFromImdbUrl(filmo[1][i][2][1].attributes["href"])
             push!(movie_ids, movie_id)
         catch e
-            prinlnt("skipped an entry for movies")
+            println("skipped an entry for movies")
         end
     end
 
@@ -260,27 +260,28 @@ function test_fetch(id::String)
 end
 #==================================================================================================#
 
+const MOVIES_DATA_FILE_PATH = "/julia/movies.serialised"
+
+# movid1 = "tt0120586" #american history x
+# movid2 = "tt0114814" #the usual suspects
+# movid3 = "tt0083944" # rambo
+
 movies = Set{Movie}()
 persons = Set{Person}()
 edward_norton_id = "nm0001570"
 
-movid1 = "tt0120586" #american history x
-movid2 = "tt0114814" #the usual suspects
-movid3 = "tt0083944" # rambo
-
-#serialize("/julia/serialised.test", movie1)
-#movieb = deserialize("/julia/serialised.test")
-
-#movie = fetch_movie(movid2)
-
-ed = fetch_person(edward_norton_id)
-
-movies_of_edward_norton = Set{Movie}()
-for mov_id in ed.movie_ids
-    push!(movies_of_edward_norton, fetch_movie(mov_id))
+if isfile(MOVIES_DATA_FILE_PATH)
+    println("Loading data file : $MOVIES_DATA_FILE_PATH")
+    movies = deserialize(MOVIES_DATA_FILE_PATH)
+else
+    println("No data file found. fetching some movies to create one.")
+    ed = fetch_person(edward_norton_id)
+    for mov_id in ed.movie_ids
+        movie = fetch_movie(mov_id)
+        push!(movies, movie)
+        println("\n\n>$(movie.title) ($(movie.year)) $(movie.rating)\n\n")
+        println()
+    end
+    serialize(MOVIES_DATA_FILE_PATH, movies)
 end
 
-#test_movie = fetch_movie("tt1221815")
-#data = test_fetch("tt1221815")
-
- 
