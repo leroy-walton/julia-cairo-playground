@@ -271,10 +271,10 @@ persons = Set{Person}()
 edward_norton_id = "nm0001570"
 
 if isfile(MOVIES_DATA_FILE_PATH)
-    println("Loading data file : $MOVIES_DATA_FILE_PATH")
+    println("Loading movies data from -> $MOVIES_DATA_FILE_PATH")
     movies = deserialize(MOVIES_DATA_FILE_PATH)
 else
-    println("No data file found. fetching some movies to create one.")
+    println("No Movies data file found. fetching some movies to create one.")
     ed = fetch_person(edward_norton_id)
     for mov_id in ed.movie_ids
         movie = fetch_movie(mov_id)
@@ -283,5 +283,9 @@ else
         println()
     end
     serialize(MOVIES_DATA_FILE_PATH, movies)
+    println("movies data serialized to $MOVIES_DATA_FILE_PATH")
 end
 
+for movie in movies
+    println("$(movie.title) ($(movie.year))   $(movie.rating) ")
+end
