@@ -204,22 +204,44 @@ function fetch_movie(id::String)
 end
 
 function fetch_person(id)
+    print("fetch_person($id)-")
     person = Person()
     person.id = id
     url="https://www.imdb.com/name/$id/"
     body = parsehtml(String(HTTP.get(url).body)).root[2]
     
     # name
+    print("name-")
     name_widget = eachmatch(sel"#name-overview-widget", body)
-    name = name_widget[1][1][1][1][1][1][1][1].text
+    name = "n/a"
+    try
+        name = name_widget[1][1][1][1][1][1][1][1].text    
+    catch
+        try 
+           name = name_widget[1][1][1][1][2][2][1][1].text
+        catch
+            print("*name not found*")
+        end
+    end
     person.name = name
 
     # birthday
-    overview_top = eachmatch(sel"#overview-top", body)
-    birthday = overview_top[1][3][2].attributes["datetime"]
+    print("birthday-")
+    #overview_top = eachmatch(sel"#overview-top", body)
+    born_info = eachmatch(sel"#name-born-info > time", body)
+    #println("\n\n$(born_info[1][2])\n\n")
+    #birthday = overview_top[1][3][2].attributes["datetime"]
+    birthday = "n/a"
+    try
+        birthday = born_info[1].attributes["datetime"]
+    catch
+        print("*birthday not found*")
+    end
+    
     person.birthday = birthday
 
     # movies
+    print("movies-")
     filmo = eachmatch(sel".filmo-category-section", body)
     movie_ids = Set{String}()
     for i in 1:size(filmo[1].children)[1]
@@ -232,6 +254,7 @@ function fetch_person(id)
     end
 
     # job_categories ( "actor" | "producer" | "writer" ...)
+    print("job_cat-")
     job_categories_html = eachmatch(sel"#name-job-categories", body)
     job_categories = Set{String}()
     for i in 1:size(job_categories_html[1].children)[1]
@@ -239,14 +262,13 @@ function fetch_person(id)
             job_category = lowercase(strip(job_categories_html[1][i][1][1].text))
             push!(job_categories, job_category)
         catch e
-            println("skipped an entry for job_categories")
+            print("*skipped an entry for job_categories*")
         end
     end
-
+    println("\n|> $(person.name)\n")
     person.movie_ids = movie_ids
     person.job_categories = job_categories
     person
-    
 end
 
 function test_fetch(id::String)
@@ -260,14 +282,17 @@ function test_fetch(id::String)
 end
 #==================================================================================================#
 
-const MOVIES_DATA_FILE_PATH = "/julia/movies.serialised"
+const MOVIES_DATA_FILE_PATH = "/julia/movies.serialized"
+const PERSONS_DATA_FILE_PATH = "/julia/persons.serialized"
 
 # movid1 = "tt0120586" #american history x
 # movid2 = "tt0114814" #the usual suspects
 # movid3 = "tt0083944" # rambo
 
-movies = Set{Movie}()
-persons = Set{Person}()
+#movies = Set{Movie}()
+movies = Dict{String,Movie}()       # {movie.id, movie}
+persons = Dict{String,Person}()     # {person.id, person}
+
 edward_norton_id = "nm0001570"
 
 if isfile(MOVIES_DATA_FILE_PATH)
@@ -278,7 +303,8 @@ else
     ed = fetch_person(edward_norton_id)
     for mov_id in ed.movie_ids
         movie = fetch_movie(mov_id)
-        push!(movies, movie)
+        #push!(movies, movie)
+        movies[movie.id] = movie
         println("\n\n>$(movie.title) ($(movie.year)) $(movie.rating)\n\n")
         println()
     end
@@ -286,6 +312,39 @@ else
     println("movies data serialized to $MOVIES_DATA_FILE_PATH")
 end
 
-for movie in movies
-    println("$(movie.title) ($(movie.year))   $(movie.rating) ")
+elem = 0
+for elem in movies
+    movie = elem[2]
+    println("$(movie.id) $(movie.title) ($(movie.year))   $(movie.rating) ")
+end
+
+if isfile(PERSONS_DATA_FILE_PATH)
+    println("Loading persons data from -> $PERSONS_DATA_FILE_PATH")
+    persons = deserialize(PERSONS_DATA_FILE_PATH)
+else
+    println("No persons data file found. fetching some persons to create one.")
+    m = movies["tt0137523"]     # Fight Club
+
+    persons_id_to_fetch = []
+    push!(persons_id_to_fetch, m.cast.director.id)
+    for p in m.cast.writers
+        push!(persons_id_to_fetch, p.id)
+    end
+    for p in m.cast.actors
+        push!(persons_id_to_fetch, p.id)
+    end
+    for p in m.cast.producers
+        push!(persons_id_to_fetch, p.id)
+    end
+
+    for id in persons_id_to_fetch
+        person = fetch_person(id)
+        persons[person.id] = person
+    end
+    serialize(PERSONS_DATA_FILE_PATH, persons)
+end
+
+for elem in persons
+    p = elem[2]
+    println("$(p.id) $(p.name) $(p.birthday)")
 end
