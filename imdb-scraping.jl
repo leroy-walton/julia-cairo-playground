@@ -2,9 +2,10 @@ using Cascadia
 using Gumbo
 using HTTP
 using Serialization
+using SQLite
 
 #using AbstractTrees
-#using DataFrames
+using DataFrames
 
 println("---")
 
@@ -348,3 +349,58 @@ for elem in persons
     p = elem[2]
     println("$(p.id) $(p.name) $(p.birthday)")
 end
+
+#==================================================================================================#
+
+db = SQLite.DB("/julia/playgrounds/resources/movie_db.sqlite")
+
+SQLite.tables(db) ## show tables
+
+SQLite.execute(db, "
+    CREATE TABLE IF NOT EXISTS movies(
+        id TEXT PRIMARY KEY,
+        title TEXT,
+        year TEXT,
+        rating TEXT,
+        genre TEXT,
+        time TEXT)
+        
+")
+
+try
+    for movie in values(movies)
+        query = """
+            INSERT INTO movies (id, title, year, rating, genre, time)
+            VALUES ('$(movie.id)', '$(movie.title)', '$(movie.year)', '$(movie.rating)', '$(movie.genre)', '$(movie.time)')
+        """
+        SQLite.execute(db,query)
+    end
+catch
+end
+
+
+
+moviesFrame = DBInterface.execute(db, "select * from movies") |> DataFrame
+sort!(moviesFrame, [:rating], rev=true)
+
+
+
+SQLite.execute(db, "
+    CREATE TABLE IF NOT EXISTS persons(
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        birthday TEXT)        
+")
+
+for person in values(persons)
+    query = """
+        INSERT INTO persons (id, name, birthday) 
+        VALUES ('$(person.id)', '$(person.name)', '$(person.birthday)')
+    """
+    try
+        SQLite.execute(db,query)
+    catch
+    end
+end
+
+personFrame = DBInterface.execute(db, "select * from persons") |> DataFrame
