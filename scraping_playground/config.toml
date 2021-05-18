@@ -1,0 +1,4 @@
+[database]
+user=mongodb-username   
+password=mongodb-password
+url="myCluster.k2du.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"

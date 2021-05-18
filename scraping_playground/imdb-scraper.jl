@@ -3,7 +3,8 @@ using Gumbo
 using HTTP
 using Serialization
 using SQLite
-
+using ConfParser
+import Mongoc
 #using AbstractTrees
 using DataFrames
 
@@ -30,7 +31,7 @@ mutable struct Cast
     movie_id::String
     director::Person
     writers::Set{Person}
-    actors::Set{Person}
+    actors::Dict{Int,Person}   # casting_rank::Int  => actor::Person     #Set{Person}
     producers::Set{Person}
     Cast() = new()
 end
@@ -43,7 +44,7 @@ function Base.hash(x::Cast, h::UInt )
 end
 
 function Base.show(io::IO, cast::Cast)
-    for person in cast.actors
+    for person in values(cast.actors)
         print(io, person.name, "|")
     end
 end
@@ -67,39 +68,39 @@ function Base.hash(x::Movie, h::UInt )
 end
 
 function Base.show(io::IO, m::Movie)
-    print(io, m.title)
+    print(io, m.id)
     try
-        print(io, " (", m.year, ")", " [", m.genre, "] ", m.rating )
+        print(io, " => ", m.title, " (", m.year, ")", " [", m.genre, "] ", m.rating )
         println(io,"")
         print(io, "    \\_: ", m.cast)
-    catch e
+    catch
     end
 end
 
-function getTitleIdFromImdbUrl(url::String)
+function getMovieIdFromImdbUrl(url::String)
     match(r"tt\d*",url).match
 end
 
-function getNameIdFromImdbUrl(url::String)
+function getPersonIdFromImdbUrl(url::String)
     match(r"nm\d*",url).match
 end
 
-function getUrlMainFromTitleId(id::String)
+function getUrlMainFromMovieId(id::String)
     "https://www.imdb.com/title/$id"
 end
 
-function getUrlCastFromTitleId(id::String)
+function getUrlCastFromMovieId(id::String)
     "https://www.imdb.com/title/$id/fullcredits/"
 end
 
-function fetch_movie(id::String)
+function scrape_movie(id::String)
     print("fetch_movie($id)-")
     movie = Movie()
     cast = Cast()
     movie.id = id
     cast.movie_id = id
     
-    url = getUrlMainFromTitleId(id)
+    url = getUrlMainFromMovieId(id)
     doc = parsehtml(String(HTTP.get(url).body))
     head = doc.root[1]
     body = doc.root[2]
@@ -126,7 +127,7 @@ function fetch_movie(id::String)
         movie.time = "n/a"
     end
     
-    url = getUrlCastFromTitleId(id)
+    url = getUrlCastFromMovieId(id)
     doc = parsehtml(String(HTTP.get(url).body))
     body = doc.root[2]
 
@@ -134,7 +135,7 @@ function fetch_movie(id::String)
     # director
     fullcredits_content = eachmatch(sel"#fullcredits_content", body)
     director_name = strip(fullcredits_content[1][2][2][1][1][1][1].text)
-    director_id = getNameIdFromImdbUrl(fullcredits_content[1][2][2][1][1][1].attributes["href"])
+    director_id = getPersonIdFromImdbUrl(fullcredits_content[1][2][2][1][1][1].attributes["href"])
     cast_director = Person()
     cast_director.name = director_name
     cast_director.id = director_id
@@ -147,7 +148,7 @@ function fetch_movie(id::String)
         for i in 1:size(fullcredits_content[1][4][2].children)[1]
             try
                 writer_name = strip(fullcredits_content[1][4][2][i][1][1][1].text)
-                writer_id = getNameIdFromImdbUrl(fullcredits_content[1][4][2][1][1][1].attributes["href"])
+                writer_id = getPersonIdFromImdbUrl(fullcredits_content[1][4][2][1][1][1].attributes["href"])
                 writer = Person()
                 writer.name = writer_name
                 writer.id = writer_id
@@ -163,14 +164,16 @@ function fetch_movie(id::String)
     print("Actors-")
     # actors
     table_rows  = eachmatch(sel".cast_list", body)[1].children[1]
-    cast_actors = Set{Person}()
+    cast_actors = Dict{Int,Person}()    # cast_rank::Int => actor::Person
     s = size(table_rows.children)[1]
+    cast_rank = 1
     for i in 2:s
         try
             actor = Person()
             actor.name = strip(table_rows[i][2][1][1].text)
-            actor.id = getNameIdFromImdbUrl(table_rows[i][2][1].attributes["href"])
-            push!(cast_actors, actor)
+            actor.id = getPersonIdFromImdbUrl(table_rows[i][2][1].attributes["href"])
+            push!(cast_actors, cast_rank => actor)
+            cast_rank +=1
         catch e
             println("*skipping an entry in actor casting")
         end
@@ -183,7 +186,7 @@ function fetch_movie(id::String)
         for i in 1:size(fullcredits_content[1][8][2].children)[1]
             try
                 producer_name = strip(fullcredits_content[1][8][2][i][1][1][1].text)
-                producer_id = getNameIdFromImdbUrl(fullcredits_content[1][8][2][i][1][1].attributes["href"])
+                producer_id = getPersonIdFromImdbUrl(fullcredits_content[1][8][2][i][1][1].attributes["href"])
                 producer = Person()
                 producer.name = producer_name
                 producer.id = producer_id
@@ -204,7 +207,7 @@ function fetch_movie(id::String)
     movie
 end
 
-function fetch_person(id)
+function scrape_person(id)
     print("fetch_person($id)-")
     person = Person()
     person.id = id
@@ -247,9 +250,9 @@ function fetch_person(id)
     movie_ids = Set{String}()
     for i in 1:size(filmo[1].children)[1]
         try
-            movie_id = getTitleIdFromImdbUrl(filmo[1][i][2][1].attributes["href"])
+            movie_id = getMovieIdFromImdbUrl(filmo[1][i][2][1].attributes["href"])
             push!(movie_ids, movie_id)
-        catch e
+        catch
             println("skipped an entry for movies")
         end
     end
@@ -262,7 +265,7 @@ function fetch_person(id)
         try
             job_category = lowercase(strip(job_categories_html[1][i][1][1].text))
             push!(job_categories, job_category)
-        catch e
+        catch
             print("*skipped an entry for job_categories*")
         end
     end
@@ -272,19 +275,59 @@ function fetch_person(id)
     person
 end
 
-function test_fetch(id::String)
+function test_scrape(id::String)
     url = "https://www.imdb.com/title/$id/fullcredits/"
     doc = parsehtml(String(HTTP.get(url).body))
     body = doc.root[2]
     
     #fullcredits_content = eachmatch(sel"#fullcredits_content", body)
     fullcredits_content = eachmatch(sel"#fullcredits_content", body)
-    writers_table=eachmatch(sel"div.header > h4#writer", body)
+    writers_table = eachmatch(sel"div.header > h4#writer", body)
 end
+
+function movies_find(collection, criteria::Dict=Dict()) :: Vector{String}
+    result = Vector{String}()
+    let
+        bson_filter = Mongoc.BSON(criteria)
+        bson_options = Mongoc.BSON("""
+                { 
+                    "projection" : 
+                        { 
+                            "id" : 1, 
+                            "title" : 1, 
+                            "year" : 1
+                        },
+                    "sort" : 
+                        {
+                            "year" : 1
+                        }
+                }
+            """)
+        for bson_document in Mongoc.find(collection, bson_filter, options=bson_options)
+            str = bson_document["title"] * " - " * bson_document["year"] 
+            push!(result, str) 
+        end
+    end
+    return result
+end
+
+#==================================================================================================#
+#=
+
+                                ███▄ ▄███▓ ▄▄▄       ██▓ ███▄    █ 
+                                ▓██▒▀█▀ ██▒▒████▄    ▓██▒ ██ ▀█   █ 
+                                ▓██    ▓██░▒██  ▀█▄  ▒██▒▓██  ▀█ ██▒
+                                ▒██    ▒██ ░██▄▄▄▄██ ░██░▓██▒  ▐▌██▒
+                                ▒██▒   ░██▒ ▓█   ▓██▒░██░▒██░   ▓██░
+                                ░ ▒░   ░  ░ ▒▒   ▓▒█░░▓  ░ ▒░   ▒ ▒ 
+                                ░  ░      ░  ▒   ▒▒ ░ ▒ ░░ ░░   ░ ▒░
+                                ░      ░     ░   ▒    ▒ ░   ░   ░ ░ 
+                                    ░         ░  ░ ░           ░ 
+=#
 #==================================================================================================#
 
-const MOVIES_DATA_FILE_PATH = "/julia/movies.serialized"
-const PERSONS_DATA_FILE_PATH = "/julia/persons.serialized"
+const MOVIES_DATA_FILE_PATH = "/julia/resources/movies.serialized"
+const PERSONS_DATA_FILE_PATH = "/julia/resources/persons.serialized"
 
 # movid1 = "tt0120586" #american history x
 # movid2 = "tt0114814" #the usual suspects
@@ -295,6 +338,8 @@ movies = Dict{String,Movie}()       # {movie.id, movie}
 persons = Dict{String,Person}()     # {person.id, person}
 
 edward_norton_id = "nm0001570"
+
+#===Serialization==================================================================================#
 
 if isfile(MOVIES_DATA_FILE_PATH)
     println("Loading movies data from -> $MOVIES_DATA_FILE_PATH")
@@ -331,7 +376,7 @@ else
     for p in m.cast.writers
         push!(persons_id_to_fetch, p.id)
     end
-    for p in m.cast.actors
+    for p in values(m.cast.actors)
         push!(persons_id_to_fetch, p.id)
     end
     for p in m.cast.producers
@@ -350,57 +395,130 @@ for elem in persons
     println("$(p.id) $(p.name) $(p.birthday)")
 end
 
-#==================================================================================================#
+#==SQLite==========================================================================================#
 
-db = SQLite.DB("/julia/playgrounds/resources/movie_db.sqlite")
+# db = SQLite.DB("/julia/playgrounds/resources/movie_db.sqlite")
 
-SQLite.tables(db) ## show tables
+# SQLite.tables(db) ## show tables
 
-SQLite.execute(db, "
-    CREATE TABLE IF NOT EXISTS movies(
-        id TEXT PRIMARY KEY,
-        title TEXT,
-        year TEXT,
-        rating TEXT,
-        genre TEXT,
-        time TEXT)
-        
-")
+# SQLite.execute(db, "
+#     CREATE TABLE IF NOT EXISTS movies(
+#         id TEXT PRIMARY KEY,
+#         title TEXT,
+#         year TEXT,
+#         rating TEXT,
+#         genre TEXT,
+#         time TEXT)
+# ")
 
+# try
+#     for movie in values(movies)
+#         query = """
+#             INSERT INTO movies (id, title, year, rating, genre, time)
+#             VALUES ('$(movie.id)', '$(movie.title)', '$(movie.year)', '$(movie.rating)', '$(movie.genre)', '$(movie.time)')
+#         """
+#         SQLite.execute(db,query)
+#     end
+# catch
+# end
+
+# moviesFrame = DBInterface.execute(db, "select * from movies") |> DataFrame
+# sort!(moviesFrame, [:rating], rev=true)
+
+
+
+
+# SQLite.execute(db, "
+#     CREATE TABLE IF NOT EXISTS persons(
+#         id TEXT PRIMARY KEY,
+#         name TEXT,
+#         birthday TEXT)        
+# ")
+
+# for person in values(persons)
+#     query = """
+#         INSERT INTO persons (id, name, birthday) 
+#         VALUES ('$(person.id)', '$(person.name)', '$(person.birthday)')
+#     """
+#     try
+#         SQLite.execute(db,query)
+#     catch
+#     end
+# end
+
+# personFrame = DBInterface.execute(db, "select * from persons") |> DataFrame
+
+
+#===MongoDB=========================================================================================#
+
+conf = ConfParse("$(homedir())/.config/imdb-scraper.jl.conf")
+parse_conf!(conf)
+user     = retrieve(conf, "database", "user")
+password = retrieve(conf, "database", "password")
+url      = retrieve(conf, "database", "url")
+
+connect_string = "mongodb+srv://$user:$password@$url"
+client = Mongoc.Client(connect_string)
+db = client["movie_industry"]
+
+collection = db["movies"]
 try
-    for movie in values(movies)
-        query = """
-            INSERT INTO movies (id, title, year, rating, genre, time)
-            VALUES ('$(movie.id)', '$(movie.title)', '$(movie.year)', '$(movie.rating)', '$(movie.genre)', '$(movie.time)')
-        """
-        SQLite.execute(db,query)
+    for id in keys(movies)
+        movie = movies[id]
+        writers_ids = []
+        for p in movie.cast.writers
+            push!(writers_ids, p.id)
+        end
+        
+        actors_ids = Dict{String,String}()
+        for p in movie.cast.actors
+             push!(actors_ids, string(p[1]) => p[2].id )
+        end
+        println(actors_ids)
+
+        producers_ids = []
+        for p in movie.cast.producers
+            push!(producers_ids, p.id)
+        end
+
+        document2 = Mongoc.BSON(Dict(
+            "id" => movie.id,
+            "title" => movie.title,
+            "year" => movie.year,
+            "rating" => movie.rating,
+            "genre" => movie.genre,
+            "time" => movie.time,
+            "cast" => Dict(
+                "director" => movie.cast.director.id,
+                "writers"  => writers_ids,
+                "actors"   => actors_ids,
+                "producers"=> producers_ids
+            )
+        ))
+        push!(collection, document2)
     end
-catch
+catch e
+    println(e)
+end
+
+collection = db["persons"]
+try
+    for id in keys(persons)
+        person = persons[id]
+        document = Mongoc.BSON()
+        document["id"] = person.id
+        document["name"] = person.name
+        document["birthday"] = person.birthday
+        document["movie_ids"] = collect(person.movie_ids)
+        document["job_categories"] = collect(person.job_categories)
+        push!(collection, document)
+    end
+catch e
+    println(e)
 end
 
 
-
-moviesFrame = DBInterface.execute(db, "select * from movies") |> DataFrame
-sort!(moviesFrame, [:rating], rev=true)
-
+#movies_collection = db["movies"]
+#movies_find(movies_collection,Dict("year"=>"2016"))
 
 
-SQLite.execute(db, "
-    CREATE TABLE IF NOT EXISTS persons(
-        id TEXT PRIMARY KEY,
-        name TEXT,
-        birthday TEXT)        
-")
-
-for person in values(persons)
-    query = """
-        INSERT INTO persons (id, name, birthday) 
-        VALUES ('$(person.id)', '$(person.name)', '$(person.birthday)')
-    """
-    try
-        SQLite.execute(db,query)
-    catch
-    end
-end
-
-personFrame = DBInterface.execute(db, "select * from persons") |> DataFrame
