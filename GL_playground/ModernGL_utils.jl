@@ -4,9 +4,13 @@ function glGenOne(glGenFn)
 	glCheckError("generating a buffer, array, or texture")
 	id[]
 end
+
 glGenBuffer() = glGenOne(glGenBuffers)
+
 glGenVertexArray() = glGenOne(glGenVertexArrays)
+
 glGenTexture() = glGenOne(glGenTextures)
+
 function getInfoLog(obj::GLuint)
 	# Return the info log for obj, whether it be a shader or a program.
 	isShader = glIsShader(obj)
@@ -29,11 +33,13 @@ function getInfoLog(obj::GLuint)
 		""
 	end
 end
+
 function validateShader(shader)
 	success = GLint[0]
 	glGetShaderiv(shader, GL_COMPILE_STATUS, success)
 	success[] == GL_TRUE
 end
+
 function glErrorMessage()
 # Return a string representing the current OpenGL error flag, or the empty string if there's no error.
 	err = glGetError()
@@ -44,16 +50,18 @@ function glErrorMessage()
 	err == GL_INVALID_FRAMEBUFFER_OPERATION ? "GL_INVALID_FRAMEBUFFER_OPERATION: The framebuffer object is not complete. The offending command is ignored and has no other side effect than to set the error flag." :
 	err == GL_OUT_OF_MEMORY ? "GL_OUT_OF_MEMORY: There is not enough memory left to execute the command. The state of the GL is undefined, except for the state of the error flags, after this error is recorded." : "Unknown OpenGL error with error code $err."
 end
+
 function glCheckError(actionName="")
 	message = glErrorMessage()
 	if length(message) > 0
 		if length(actionName) > 0
-		error("Error ", actionName, ": ", message)
+			error("Error ", actionName, ": ", message)
 		else
-		error("Error: ", message)
+			error("Error: ", message)
 		end
 	end
 end
+
 function createShader(source, typ)
 # Create the shader
 	shader = glCreateShader(typ)::GLuint
@@ -67,6 +75,7 @@ function createShader(source, typ)
 	!validateShader(shader) && error("Shader creation error: ", getInfoLog(shader))
 	shader
 end
+
 function createShaderProgram(f, vertexShader, fragmentShader)
 	# Create, link then return a shader program for the given shaders.
 	# Create the shader program
@@ -89,10 +98,17 @@ function createShaderProgram(f, vertexShader, fragmentShader)
 		glDeleteProgram(prog)
 		error("Error linking shader: ", glGetInfoLog(prog))
 	end
+
+	glDeleteShader(vertexShader)
+	glDeleteShader(fragmentShader)
+
 	prog
 end
+
 createShaderProgram(vertexShader, fragmentShader) = createShaderProgram(prog->0, vertexShader, fragmentShader)
+
 global GLSL_VERSION = ""
+
 function createcontextinfo()
 	global GLSL_VERSION
 	glsl = split(unsafe_string(glGetString(GL_SHADING_LANGUAGE_VERSION)), ['.', ' '])
@@ -117,6 +133,7 @@ function createcontextinfo()
 	    #:gl_extensions => split(unsafe_string(glGetString(GL_EXTENSIONS))),
 	)
 end
+
 function get_glsl_version_string()
 	if isempty(GLSL_VERSION)
 		error("couldn't get GLSL version, GLUTils not initialized, or context not created?")
