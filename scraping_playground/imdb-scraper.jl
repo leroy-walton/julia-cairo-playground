@@ -559,10 +559,3 @@ for movie in values(movies)
 end
 println("total_persons : $total_persons")
 println("Failed scrape : $(length(person_ids_scrape_failed))")
-#println("saving failed ids.")
-#serialize(PERSONS_FAILED_SCRAPE, person_ids_scrape_failed)
-
-
-
-
-
