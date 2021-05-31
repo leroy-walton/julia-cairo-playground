@@ -3,7 +3,6 @@ using CSFML.LibCSFML
 using ModernGL
 include("ModernGL_utils.jl")
 
-
 #using GeometryTypes
 mode = sfVideoMode(700, 720, 32)
 
@@ -17,87 +16,93 @@ window = sfRenderWindow_create(mode, "SFML window", sfResize | sfClose, C_NULL)
 sfWindow_setVerticalSyncEnabled(window,true)
 sfWindow_setActive(window, sfTrue)
 
-font = sfFont_createFromFile(joinpath("/julia/playgrounds/resources/NotoSans-Black.ttf"))
-@assert font != C_NULL
+println(createcontextinfo()) # used by ModernGL_utils;
+glEnable(GL_DEPTH_TEST)
+glDepthFunc(GL_LESS)
+glClearColor(0.4 ,0.2, 0.3, 1.0)
 
-text = sfText_create()
-sfText_setString(text, "The quick brown fox jumps over the lazy dog.")
-sfText_setPosition(text, sfVector2f(100,5))
-sfText_setFont(text, font)
-sfText_setCharacterSize(text, 20)
 
-data = GLfloat[
-    0.0, 0.5,
-    0.5, -0.5,
-    -0.5,-0.5
-]
 
-# load resources, initialize the OpenGL states,
-# vbo
-createcontextinfo()
-vao = glGenVertexArray()
-glBindVertexArray(vao)
-vbo = glGenBuffer()
-glBindBuffer(GL_ARRAY_BUFFER, vbo)
-glBufferData(GL_ARRAY_BUFFER, sizeof(data), data, GL_STATIC_DRAW)
 
-# shader
-const vsh = """
-    $(get_glsl_version_string())
-    //layout(location = 0) in vec3 v_position;
-    //layout(location = 1) in vec3 v_colour;
-
-    in vec3 position;
-    in vec3 color;
-    out vec3 gl_Color;
-    void main() {
-        gl_Color = color;
-        gl_Position = vec4(position, 1.0);
-    }
-    """
-const fsh = """
-    $(get_glsl_version_string())
-    out vec4 outColor;
-    void main() {
-        outColor = vec4(1.0, 1.0, 1.0, 1.0);
-    }
-    """
-vertexShader = createShader(vsh, GL_VERTEX_SHADER)
-fragmentShader = createShader(fsh, GL_FRAGMENT_SHADER)
-program = createShaderProgram(vertexShader, fragmentShader)
-glUseProgram(program)
-positionAttribute = glGetAttribLocation(program, "position");
-glEnableVertexAttribArray(positionAttribute)
-glVertexAttribPointer(positionAttribute, 2, GL_FLOAT, false, 0, C_NULL)
-
-# sfEvtMouseButtonPressed
-
-###############
-
-points = [
+points = GLfloat[
    0.0,  0.5,  0.0,
    0.5, -0.5,  0.0,
   -0.5, -0.5,  0.0
 ]
-colors = [
+
+colors = GLfloat[
     1,0,0,
     0,1,0,
     0,0,1
 ]
+
 points_vbo = glGenBuffer()
 glBindBuffer(GL_ARRAY_BUFFER, points_vbo)
-glBufferData(GL_ARRAY_BUFFER, 9 * sizeof(Float64), points, GL_STATIC_DRAW)
+glBufferData(GL_ARRAY_BUFFER, sizeof(points), points, GL_STATIC_DRAW)
+
 colours_vbo = glGenBuffer()
 glBindBuffer(GL_ARRAY_BUFFER, colours_vbo)
-glBufferData(GL_ARRAY_BUFFER, 9 * sizeof(Float64), colors, GL_STATIC_DRAW)
-vao2 = glGenVertexArray()
-glBindVertexArray(vao2)
+glBufferData(GL_ARRAY_BUFFER, sizeof(colors), colors, GL_STATIC_DRAW)
+
+vao = glGenVertexArray()
+glBindVertexArray(vao)
+
 glBindBuffer(GL_ARRAY_BUFFER, points_vbo)
-glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
-glBindBuffer(GL_ARRAY_BUFFER, colours_vbo)
 glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
-glEnableVertexAttribArray(0);
 glEnableVertexAttribArray(1);
+
+glBindBuffer(GL_ARRAY_BUFFER, colours_vbo)
+glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
+glEnableVertexAttribArray(2);
+
+# shader
+
+vsh = """
+    $(get_glsl_version_string())
+    //layout(location = 0) in vec3 v_position;
+    //layout(location = 1) in vec3 v_colour;
+
+    in vec3 v_position;
+    in vec3 v_color;
+    out vec3 glcolor;
+    void main() {
+        glcolor = v_color;
+        gl_Position = vec4(v_position, 1.0);
+    }
+    """
+
+fsh = """
+    $(get_glsl_version_string())
+    in vec3 frag_colour;
+    out vec4 outColor;
+    void main() {
+        //outColor = vec4(1.0, 1.0, 1.0, 1.0);
+        outColor = vec4(frag_colour, 1.0 );
+    }
+    """
+
+vertexShader = createShader(vsh, GL_VERTEX_SHADER)
+fragmentShader = createShader(fsh, GL_FRAGMENT_SHADER)
+
+function bindAttrib(shader_program) 
+    glBindAttribLocation(shader_program, 0, "v_position");
+    glBindAttribLocation(shader_program, 1, "v_colour");
+end
+
+program = createShaderProgram( bindAttrib, vertexShader, fragmentShader)
+glUseProgram(program)
+
+positionAttribute = glGetAttribLocation(program, "v_position");
+println("positionAttribute : $positionAttribute")
+glEnableVertexAttribArray(positionAttribute)
+glVertexAttribPointer(positionAttribute, 3, GL_FLOAT, false, 0, C_NULL)
+
+colorAttribute = glGetAttribLocation(program, "v_color");
+println("colorAttribute : $colorAttribute")
+#glEnableVertexAttribArray(colorAttribute)
+#glVertexAttribPointer(colorAttribute, 3, GL_FLOAT, false, 0, C_NULL)
+
+
 
 
 event_ref = Ref{sfEvent}()
@@ -152,63 +157,21 @@ while (running)
         end
         time_event_processing = round(get_time(clock) - t0, digits=9)
         
-     
-        sfRenderWindow_popGLStates(window)
-
-    	glClearColor(
-            0.5 * (0.5 + sin(get_time(clock) * 5)),
-            0.05,
-            0.07,
-            1.0
-            )
-
-    	glClear(GL_COLOR_BUFFER_BIT)
-
+    	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        
+        glUseProgram(program)
         glBindVertexArray(vao)
-        glDrawArrays(GL_TRIANGLES, 0, 3)
-
-        sfRenderWindow_pushGLStates(window)
-        sfRenderWindow_resetGLStates(window)
-
-        sfRenderWindow_drawText(window, text, C_NULL)
-
-        # --sfRenderStates
-        # state.shader = shader;
-        # state.blendMode = sfBlendAlpha;
-        # state.transform = sfTransform_Identity;
-        # state.texture = NULL;
-        # struct sfRenderStates
-        #     blendMode::sfBlendMode
-        #     transform::sfTransform
-        #     texture::Ptr{sfTexture}
-        #     shader::Ptr{sfShader}
-        # end
-
-        # --shader
-        # string frag = r"void main() { gl_FragColor = vec4(1,0,0,1); }";
-        # sfShader* shader = sfShader_createFromMemory(null, frag);
-        # sf::Shader shader; shader.loadFromMemory(frag, sf::Shader::Fragment);
+        glDrawArrays(GL_TRIANGLES, 0 , 3)
 
         time_render = round(get_time(clock) - time_event_processing - t0, digits=9)
 
-        sf_text = sfText_create()
-        sfText_setPosition(sf_text, sfVector2f(4,700))
-        sfText_setString(sf_text, "frame render time : $time_render seconds.")
-        sfText_setFont(sf_text, font)
-        sfText_setCharacterSize(sf_text, 14)
-        sfRenderWindow_drawText(window, sf_text, C_NULL)
+        #sfRenderWindow_pushGLStates(window)
+        #sfRenderWindow_resetGLStates(window)
+        #sfRenderWindow_popGLStates(window)
 
-        sf_text2 = sfText_create()
-        sfText_setPosition(sf_text2, sfVector2f(0.,0.))
-        sfText_setString(sf_text2, "fps : $actual_frequency")
-        sfText_setFont(sf_text2, font)
-        sfText_setCharacterSize(sf_text2, 14)
-        sfText_setColor(sf_text2, sfColor(240,150,140,255))
-        sfRenderWindow_drawText(window, sf_text2, C_NULL)
-        sfRenderWindow_popGLStates(window)
         sfRenderWindow_display(window)
         time_to_sleep = 1 / target_frequency - time_render - time_event_processing
-        
+
         if time_to_sleep > 0.005
             sleep(time_to_sleep-0.005)
         end
@@ -216,6 +179,4 @@ while (running)
 
 end
 
-sfText_destroy(text)
-sfFont_destroy(font)
 sfRenderWindow_destroy(window)
