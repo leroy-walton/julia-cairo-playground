@@ -35,8 +35,8 @@ points_vbo = glGenBuffer()
 glBindBuffer(GL_ARRAY_BUFFER, points_vbo)
 glBufferData(GL_ARRAY_BUFFER, sizeof(points), points, GL_STATIC_DRAW)
 
-colours_vbo = glGenBuffer()
-glBindBuffer(GL_ARRAY_BUFFER, colours_vbo)
+colors_vbo = glGenBuffer()
+glBindBuffer(GL_ARRAY_BUFFER, colors_vbo)
 glBufferData(GL_ARRAY_BUFFER, sizeof(colors), colors, GL_STATIC_DRAW)
 
 vao = glGenVertexArray()
@@ -44,10 +44,12 @@ glBindVertexArray(vao)
 
 glBindBuffer(GL_ARRAY_BUFFER, points_vbo)
 glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
-glEnableVertexAttribArray(0);
 
-#glBindBuffer(GL_ARRAY_BUFFER, colours_vbo)
+#glBindBuffer(GL_ARRAY_BUFFER, colors_vbo)
 #glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
+
+
+#glEnableVertexAttribArray(0);
 #glEnableVertexAttribArray(1);
 
 # shaders
@@ -148,7 +150,7 @@ while (running)
             end
         end
         time_event_processing = round(get_time(clock) - t0, digits=9)
-        
+        #glPolygonMode(GL_FRONT, GL_LINE)
     	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         
         glUseProgram(program)
@@ -168,7 +170,6 @@ while (running)
             sleep(time_to_sleep-0.005)
         end
     end
-
 end
 
 sfRenderWindow_destroy(window)
