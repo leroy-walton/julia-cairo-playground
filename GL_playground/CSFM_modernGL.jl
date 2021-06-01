@@ -45,19 +45,19 @@ glBindVertexArray(vao)
 glBindBuffer(GL_ARRAY_BUFFER, points_vbo)
 glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
 
-#glBindBuffer(GL_ARRAY_BUFFER, colors_vbo)
-#glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
+glBindBuffer(GL_ARRAY_BUFFER, colors_vbo)
+glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
 
 
-#glEnableVertexAttribArray(0);
-#glEnableVertexAttribArray(1);
+glEnableVertexAttribArray(0);
+glEnableVertexAttribArray(1);
 
 # shaders
 
 vsh = """
     $(get_glsl_version_string())
     //layout(location = 0) in vec3 v_position;
-    //layout(location = 1) in vec3 v_colour;
+    //layout(location = 1) in vec3 v_color;
 
     in vec3 v_position;
     in vec3 v_color;
@@ -83,7 +83,7 @@ fragmentShader = createShader(fsh, GL_FRAGMENT_SHADER)
 
 function bindAttrib(shader_program) 
     glBindAttribLocation(shader_program, 0, "v_position");
-    glBindAttribLocation(shader_program, 1, "v_colour");
+    glBindAttribLocation(shader_program, 1, "v_color");
 end
 
 program = createShaderProgram( bindAttrib, vertexShader, fragmentShader)
@@ -92,7 +92,7 @@ glUseProgram(program)
 positionAttribute = glGetAttribLocation(program, "v_position");
 println("positionAttribute : $positionAttribute")
 glEnableVertexAttribArray(positionAttribute)
-glVertexAttribPointer(positionAttribute, 3, GL_FLOAT, false, 0, C_NULL)
+glVertexAttribPointer(positionAttribute, 6, GL_FLOAT, false, 0, C_NULL)
 
 colorAttribute = glGetAttribLocation(program, "v_color");
 println("colorAttribute : $colorAttribute")
