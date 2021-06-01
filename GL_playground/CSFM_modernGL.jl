@@ -1,29 +1,24 @@
 using CSFML.LibCSFML
-
 using ModernGL
+#using GeometryTypes
 include("ModernGL_utils.jl")
 
-#using GeometryTypes
+# Init
 mode = sfVideoMode(700, 720, 32)
-
 # settings = SF::ContextSettings.new(
 #   depth: 24, stencil: 8, antialiasing: 4,
 #   major: 3, minor: 0
 # )
-
 window = sfRenderWindow_create(mode, "SFML window", sfResize | sfClose, C_NULL)
 @assert window != C_NULL
 sfWindow_setVerticalSyncEnabled(window,true)
 sfWindow_setActive(window, sfTrue)
-
 println(createcontextinfo()) # used by ModernGL_utils;
 glEnable(GL_DEPTH_TEST)
 glDepthFunc(GL_LESS)
 glClearColor(0.4 ,0.2, 0.3, 1.0)
 
-
-
-
+##
 points = GLfloat[
    0.0,  0.5,  0.0,
    0.5, -0.5,  0.0,
@@ -48,14 +43,14 @@ vao = glGenVertexArray()
 glBindVertexArray(vao)
 
 glBindBuffer(GL_ARRAY_BUFFER, points_vbo)
-glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
-glEnableVertexAttribArray(1);
+glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
+glEnableVertexAttribArray(0);
 
-glBindBuffer(GL_ARRAY_BUFFER, colours_vbo)
-glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
-glEnableVertexAttribArray(2);
+#glBindBuffer(GL_ARRAY_BUFFER, colours_vbo)
+#glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
+#glEnableVertexAttribArray(1);
 
-# shader
+# shaders
 
 vsh = """
     $(get_glsl_version_string())
@@ -64,20 +59,20 @@ vsh = """
 
     in vec3 v_position;
     in vec3 v_color;
-    out vec3 glcolor;
+    out vec3 initial_Color;
     void main() {
-        glcolor = v_color;
+        initial_Color = v_color;
         gl_Position = vec4(v_position, 1.0);
     }
     """
 
 fsh = """
     $(get_glsl_version_string())
-    in vec3 frag_colour;
+    in vec3 initial_Color;
     out vec4 outColor;
     void main() {
-        //outColor = vec4(1.0, 1.0, 1.0, 1.0);
-        outColor = vec4(frag_colour, 1.0 );
+        outColor = vec4(5.0, 2.0, 3.0, 1.0);
+        //outColor = vec4(frag_colour, 1.0 );
     }
     """
 
@@ -102,16 +97,13 @@ println("colorAttribute : $colorAttribute")
 #glEnableVertexAttribArray(colorAttribute)
 #glVertexAttribPointer(colorAttribute, 3, GL_FLOAT, false, 0, C_NULL)
 
-
-
-
 event_ref = Ref{sfEvent}()
 clock = sfClock_create()
 # Let's express time in seconds.
-function get_time(clock ::Ptr{Nothing})
+function get_time(clock::Ptr{sfClock})
     sfTime_asSeconds(sfClock_getElapsedTime(clock))
 end
-function restart(clock ::Ptr{Nothing})
+function restart(clock::Ptr{sfClock})
      sfTime_asSeconds(sfClock_restart(clock))
 end
 
@@ -123,7 +115,7 @@ while (running)
     while Bool(sfRenderWindow_isOpen(window)) && running
         frame_timestamp = get_time(clock)
         frame_time = frame_timestamp - t0
-        t0 = frame_timestamp
+        global t0 = frame_timestamp
         actual_frequency = 1 / frame_time
         
         # process events
@@ -143,14 +135,14 @@ while (running)
             event_ref[].type == sfEvtMouseMoved && println("Trigger sfEvtMouseMoved: $(event_ref[].mouseMove.x), $(event_ref[].mouseMove.y)")
             
             if event_ref[].type == sfEvtClosed
-                running = false
+                global running = false
                 println("Render window closed.")
             elseif event_ref[].type == sfEvtResized
                 glViewport(9, 9, event_ref[].size.width, event_ref[].size.height)
                 println("Viewport updated.")
             elseif event_ref[].type == sfEvtKeyPressed
                 if event_ref[].key.code == sfKeyQ
-                    running = false
+                    global running = false
                     println("Quiting application.")
                 end
             end
