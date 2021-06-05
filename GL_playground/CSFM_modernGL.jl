@@ -1,9 +1,11 @@
+using Base: Int32
 using CSFML.LibCSFML
 using ModernGL
 #using GeometryTypes
 include("ModernGL_utils.jl")
 
-# Init
+###Init
+
 mode = sfVideoMode(700, 720, 32)
 # settings = SF::ContextSettings.new(
 #   depth: 24, stencil: 8, antialiasing: 4,
@@ -18,41 +20,7 @@ glEnable(GL_DEPTH_TEST)
 glDepthFunc(GL_LESS)
 glClearColor(0.4 ,0.2, 0.3, 1.0)
 
-##
-points = GLfloat[
-   0.0,  0.5,  0.0,
-   0.5, -0.5,  0.0,
-  -0.5, -0.5,  0.0
-]
-
-colors = GLfloat[
-    1,0,0,
-    0,1,0,
-    0,0,1
-]
-
-points_vbo = glGenBuffer()
-glBindBuffer(GL_ARRAY_BUFFER, points_vbo)
-glBufferData(GL_ARRAY_BUFFER, sizeof(points), points, GL_STATIC_DRAW)
-
-colors_vbo = glGenBuffer()
-glBindBuffer(GL_ARRAY_BUFFER, colors_vbo)
-glBufferData(GL_ARRAY_BUFFER, sizeof(colors), colors, GL_STATIC_DRAW)
-
-vao = glGenVertexArray()
-glBindVertexArray(vao)
-
-glBindBuffer(GL_ARRAY_BUFFER, points_vbo)
-glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
-
-glBindBuffer(GL_ARRAY_BUFFER, colors_vbo)
-glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
-
-
-glEnableVertexAttribArray(0);
-glEnableVertexAttribArray(1);
-
-# shaders
+### shaders
 
 vsh = """
     $(get_glsl_version_string())
@@ -89,15 +57,75 @@ end
 program = createShaderProgram( bindAttrib, vertexShader, fragmentShader)
 glUseProgram(program)
 
+print("shader ---> ")
+glCheckError()
+
+#value = Int32(-1)
+#glGetProgramiv(program, GL_ATTACHED_SHADERS, value)
+#println("GL_ATTACHED_SHADERS = $value")
+
+
+### vertex, colors and buffers
+
+points = GLfloat[
+   0.0,  0.5,  0.0,
+   0.5, -0.5,  0.0,
+  -0.5, -0.5,  0.0
+]
+
+colors = GLfloat[
+    1.0, 0.0, 0.0,
+    0.0, 1.0, 0.0,
+    0.0, 0.0, 1.0
+]
+
+points_vbo = glGenBuffer()
+glBindBuffer(GL_ARRAY_BUFFER, points_vbo)
+glBufferData(GL_ARRAY_BUFFER, sizeof(points), points, GL_STATIC_DRAW)
+
+
+colors_vbo = glGenBuffer()
+glBindBuffer(GL_ARRAY_BUFFER, colors_vbo)
+glBufferData(GL_ARRAY_BUFFER, sizeof(colors), colors, GL_STATIC_DRAW)
+
+vao = glGenVertexArray()
+glBindVertexArray(vao)
+glEnableVertexAttribArray(0);
+glEnableVertexAttribArray(1);
+
+glBindBuffer(GL_ARRAY_BUFFER, points_vbo)
+glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
+
+glBindBuffer(GL_ARRAY_BUFFER, colors_vbo)
+glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
+print("vertexArray ---> ")
+glCheckError()
+
+
+glBindBuffer(GL_ARRAY_BUFFER, points_vbo)
 positionAttribute = glGetAttribLocation(program, "v_position");
+print("VertexAttribPointer ---> ")
+glCheckError()
 println("positionAttribute : $positionAttribute")
 glEnableVertexAttribArray(positionAttribute)
-glVertexAttribPointer(positionAttribute, 6, GL_FLOAT, false, 0, C_NULL)
+println("enableVertArr ---> ")
+glCheckError()
+glVertexAttribPointer(positionAttribute, 3, GL_FLOAT, false, 0, C_NULL)
+println("VertexAttribPointer ---> ")
+glCheckError()
 
+glBindBuffer(GL_ARRAY_BUFFER, colors_vbo)
 colorAttribute = glGetAttribLocation(program, "v_color");
+println(" glGetAttribLocation ---> ")
+glCheckError()
 println("colorAttribute : $colorAttribute")
+
+
+
 #glEnableVertexAttribArray(colorAttribute)
-#glVertexAttribPointer(colorAttribute, 3, GL_FLOAT, false, 0, C_NULL)
+
+#glEnableVertexAttribArray(1)
+#glVertexAttribPointer(1, 3, GL_FLOAT, false, 0, C_NULL)
 
 event_ref = Ref{sfEvent}()
 clock = sfClock_create()
@@ -152,7 +180,7 @@ while (running)
         time_event_processing = round(get_time(clock) - t0, digits=9)
         #glPolygonMode(GL_FRONT, GL_LINE)
     	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        
+        #glBindBuffer(GL_ARRAY_BUFFER, colors_vbo)
         glUseProgram(program)
         glBindVertexArray(vao)
         glDrawArrays(GL_TRIANGLES, 0 , 3)
